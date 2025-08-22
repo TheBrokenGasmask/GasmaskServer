@@ -11,6 +11,7 @@ class ChatBridgeService {
     constructor() {
         this.discordWebhook = new DiscordWebhook();
         this.messageCache = new Map();
+        this.messageStatus = new Map();
         this.messageOccurrences = new Map();
         this.clientMessageMap = new Map();
         this.cacheExpiry = 8000; // 8 seconds
@@ -30,64 +31,97 @@ class ChatBridgeService {
         return `${username}:${message}:${Math.floor(time / 1000)}`;
     }
 
-    async shouldProcessMessage(username, message, client, timestamp = null) {
+    shouldProcessMessage(username, message, client, timestamp = null) {
         const hash = this.generateMessageHash(username, message, timestamp);
+        const now = Date.now();
+        
+        const currentStatus = this.messageStatus.get(hash);
+        
+        if (currentStatus === 'processed') {
+            return false;
+        }
         
         if (!this.messageOccurrences.has(hash)) {
             this.messageOccurrences.set(hash, {
                 count: 0,
                 clients: new Set(),
-                firstSeen: Date.now(),
+                firstSeen: now,
                 processed: false
             });
+            this.messageStatus.set(hash, 'pending');
         }
-
+        
         const messageData = this.messageOccurrences.get(hash);
         
-        const now = Date.now();
         if (now - messageData.firstSeen > this.cacheExpiry) {
             messageData.count = 0;
             messageData.clients.clear();
             messageData.firstSeen = now;
             messageData.processed = false;
+            this.messageStatus.set(hash, 'pending');
         }
         
         if (messageData.processed) {
             return false;
         }
-
+        
         if (!messageData.clients.has(client)) {
             messageData.clients.add(client);
             messageData.count++;
         }
-
-        if (messageData.count >= config.get("minimum-client-threshold")) {
+        
+        if (messageData.count >= config.get("minimum-client-threshold") && 
+            this.messageStatus.get(hash) === 'pending') {
+            
+            this.messageStatus.set(hash, 'processed');
             messageData.processed = true;
             return true;
         }
-
+        
         return false;
     }
 
-    async isDuplicateMessage(username, message, timestamp = null) {
+    isDuplicateMessage(username, message, timestamp = null) {
         const hash = this.generateMessageHash(username, message, timestamp);
+        const now = Date.now();
         
-        if (this.messageCache.has(hash)) {
+        const currentStatus = this.messageStatus.get(hash);
+        
+        if (currentStatus === 'processed' || currentStatus === 'duplicate') {
             return true;
         }
         
-        this.messageCache.set(hash, Date.now());
-        return false;
+        if (this.messageOccurrences.has(hash)) {
+            const messageData = this.messageOccurrences.get(hash);
+            if (now - messageData.firstSeen > this.cacheExpiry) {
+                this.messageStatus.delete(hash);
+                this.messageOccurrences.delete(hash);
+            } else {
+                this.messageStatus.set(hash, 'duplicate');
+                return true;
+            }
+        }
+        
+        if (!this.messageStatus.has(hash)) {
+            this.messageStatus.set(hash, 'duplicate');
+            this.messageOccurrences.set(hash, {
+                firstSeen: now,
+                processed: false
+            });
+            return false;
+        }
+        
+        return true;
     }
 
     async handleMinecraftMessage(client, packet) {
         const { username, message } = packet.data;
 
-        if (!await this.shouldProcessMessage(username, message, client)) {
+        if (this.shouldProcessMessage(username, message, client)) {
             return null;
         }
 
-        if (await this.isDuplicateMessage(username, message)) {
+        if (this.isDuplicateMessage(username, message)) {
             console.log(`Duplicate message filtered: ${username}: ${message}`);
             return null;
         }
@@ -104,7 +138,7 @@ class ChatBridgeService {
             console.warn('Invalid chat message packet: missing username or message');
             return null;
         }
-        
+
         console.log(`Processing Minecraft message: ${username}: ${message}: ${uuid}`);
         
         let messageData = message;
@@ -194,27 +228,23 @@ class ChatBridgeService {
     startCleanup() {
         setInterval(() => {
             const now = Date.now();
-            const expiredEntries = [];
-            const expiredOccurrences = [];
+            const expiredHashes = [];
             
-            for (const [hash, timestamp] of this.messageCache.entries()) {
-                if (now - timestamp > this.cacheExpiry) {
-                    expiredEntries.push(hash);
-                }
-            }
-
+            // Find expired entries
             for (const [hash, data] of this.messageOccurrences.entries()) {
                 if (now - data.firstSeen > this.cacheExpiry) {
-                    expiredOccurrences.push(hash);
+                    expiredHashes.push(hash);
                 }
             }
             
-            expiredEntries.forEach(hash => this.messageCache.delete(hash));
-            expiredOccurrences.forEach(hash => this.messageOccurrences.delete(hash));
+            // Clean up expired entries
+            expiredHashes.forEach(hash => {
+                this.messageOccurrences.delete(hash);
+                this.messageStatus.delete(hash);
+            });
             
-            if (expiredEntries.length > 0) {
-                console.log(`Cleaned up ${expiredEntries.length} expired message cache entries`);
-                console.log(`Cleaned up ${expiredEntries.length} expired message cache entries and ${expiredOccurrences.length} message occurrences`);
+            if (expiredHashes.length > 0) {
+                console.log(`Cleaned up ${expiredHashes.length} expired message entries`);
             }
         }, this.cleanupInterval);
     }
