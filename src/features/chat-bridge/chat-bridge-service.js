@@ -83,11 +83,11 @@ class ChatBridgeService {
     async handleMinecraftMessage(client, packet) {
         const { username, message } = packet.data;
 
-        if (!this.shouldProcessMessage(username, message, client)) {
+        if (!await this.shouldProcessMessage(username, message, client)) {
             return null;
         }
 
-        if (this.isDuplicateMessage(username, message)) {
+        if (await this.isDuplicateMessage(username, message)) {
             console.log(`Duplicate message filtered: ${username}: ${message}`);
             return null;
         }
@@ -104,19 +104,7 @@ class ChatBridgeService {
             console.warn('Invalid chat message packet: missing username or message');
             return null;
         }
-
-<<<<<<< HEAD
-=======
-        if (!await this.shouldProcessMessage(username, message, client)) {
-            return null;
-        }
-
-        if (await this.isDuplicateMessage(username, message)) {
-            console.log(`Duplicate message filtered: ${username}: ${message}`);
-            return null;
-        }
-
->>>>>>> cd08cc3c2474d38e22e139b7fd775c4bfdc6a46c
+        
         console.log(`Processing Minecraft message: ${username}: ${message}: ${uuid}`);
         
         let messageData = message;
