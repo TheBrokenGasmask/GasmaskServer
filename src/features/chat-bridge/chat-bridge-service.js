@@ -30,7 +30,7 @@ class ChatBridgeService {
         return `${username}:${message}:${Math.floor(time / 1000)}`;
     }
 
-    shouldProcessMessage(username, message, client, timestamp = null) {
+    async shouldProcessMessage(username, message, client, timestamp = null) {
         const hash = this.generateMessageHash(username, message, timestamp);
         
         if (!this.messageOccurrences.has(hash)) {
@@ -69,7 +69,7 @@ class ChatBridgeService {
         return false;
     }
 
-    isDuplicateMessage(username, message, timestamp = null) {
+    async isDuplicateMessage(username, message, timestamp = null) {
         const hash = this.generateMessageHash(username, message, timestamp);
         
         if (this.messageCache.has(hash)) {
@@ -95,11 +95,11 @@ class ChatBridgeService {
             return null;
         }
 
-        if (!this.shouldProcessMessage(username, message, client)) {
+        if (!await this.shouldProcessMessage(username, message, client)) {
             return null;
         }
 
-        if (this.isDuplicateMessage(username, message)) {
+        if (await this.isDuplicateMessage(username, message)) {
             console.log(`Duplicate message filtered: ${username}: ${message}`);
             return null;
         }
@@ -157,7 +157,7 @@ class ChatBridgeService {
         const minecraftUuid = accountLink.minecraft_uuid;
         const message = content;
 
-        if (this.isDuplicateMessage(minecraftUsername, message)) {
+        if (await this.isDuplicateMessage(minecraftUsername, message)) {
             console.log(`Duplicate Discord message filtered: ${minecraftUsername}: ${message}`);
             return;
         }
