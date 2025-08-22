@@ -5,7 +5,6 @@ const accountLinkingService = require('../account-linking/account-linking-servic
 const { rankService } = require('../ranks/rank-service');
 const {requestUUID} = require("../../core/utilities");
 const {analyzeAndFormatItems} = require("./encoded-item");
-const { config } = require("../../core/config");
 
 
 class ChatBridgeService {
