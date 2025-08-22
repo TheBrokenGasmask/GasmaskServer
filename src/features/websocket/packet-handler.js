@@ -13,6 +13,8 @@ class PacketHandler {
     handlePacket(client, packet) {
         const handler = this.packets.get(packet.type);
 
+        console.log("Incoming packet:", packet.type, "from client:", client.uuid);
+
         if (handler) return handler(client, packet);
         else throw new Error(`Unknown packet type: ${packet.type}`);
     }
