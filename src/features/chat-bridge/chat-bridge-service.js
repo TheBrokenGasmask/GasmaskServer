@@ -35,9 +35,7 @@ class ChatBridgeService {
         const hash = this.generateMessageHash(username, message, timestamp);
         const now = Date.now();
         
-        const currentStatus = this.messageStatus.get(hash);
-        
-        if (currentStatus === 'processed') {
+        if (this.messageStatus.get(hash) === 'processed') {
             return false;
         }
         
@@ -70,9 +68,8 @@ class ChatBridgeService {
             messageData.count++;
         }
         
-        if (messageData.count >= config.get("minimum-client-threshold") && 
-            this.messageStatus.get(hash) === 'pending') {
-            
+        const threshold = config.get("minimum-client-threshold");
+        if (messageData.count >= threshold && this.messageStatus.get(hash) === 'pending') {
             this.messageStatus.set(hash, 'processed');
             messageData.processed = true;
             return true;
@@ -85,46 +82,31 @@ class ChatBridgeService {
         const hash = this.generateMessageHash(username, message, timestamp);
         const now = Date.now();
         
-        const currentStatus = this.messageStatus.get(hash);
-        
-        if (currentStatus === 'processed' || currentStatus === 'duplicate') {
-            return true;
-        }
-        
         if (this.messageOccurrences.has(hash)) {
             const messageData = this.messageOccurrences.get(hash);
             if (now - messageData.firstSeen > this.cacheExpiry) {
-                this.messageStatus.delete(hash);
                 this.messageOccurrences.delete(hash);
-            } else {
-                this.messageStatus.set(hash, 'duplicate');
-                return true;
+                this.messageStatus.delete(hash);
+                return false;
             }
+            
+            return this.messageStatus.get(hash) === 'processed';
         }
         
-        if (!this.messageStatus.has(hash)) {
-            this.messageStatus.set(hash, 'duplicate');
-            this.messageOccurrences.set(hash, {
-                firstSeen: now,
-                processed: false
-            });
-            return false;
-        }
-        
-        return true;
+        return false;
     }
 
     async handleMinecraftMessage(client, packet) {
         const { username, message } = packet.data;
 
-        if (this.shouldProcessMessage(username, message, client)) {
+        if (!this.shouldProcessMessage(username, message, client)) {
+            if (this.isDuplicateMessage(username, message)) {
+                console.log(`Duplicate message filtered: ${username}: ${message}`);
+                return null;
+            }
             return null;
         }
 
-        if (this.isDuplicateMessage(username, message)) {
-            console.log(`Duplicate message filtered: ${username}: ${message}`);
-            return null;
-        }
 
         const uuidAndName = await requestUUID(username);
         const uuid = uuidAndName.uuid;
@@ -230,14 +212,12 @@ class ChatBridgeService {
             const now = Date.now();
             const expiredHashes = [];
             
-            // Find expired entries
             for (const [hash, data] of this.messageOccurrences.entries()) {
                 if (now - data.firstSeen > this.cacheExpiry) {
                     expiredHashes.push(hash);
                 }
             }
             
-            // Clean up expired entries
             expiredHashes.forEach(hash => {
                 this.messageOccurrences.delete(hash);
                 this.messageStatus.delete(hash);
