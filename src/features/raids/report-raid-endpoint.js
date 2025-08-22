@@ -128,6 +128,7 @@ class RaidReportService {
 
         console.log(`Processing raid report: ${raid} with players [${players.join(', ')}] reported by ${reporter}`);
 
+        console.log(`Raid Report Log: raid - ${raid} players - ${resolvedUUIDs[0]} ${resolvedUUIDs[1]} ${resolvedUUIDs[2]} ${resolvedUUIDs[3]} reporter - ${reporter} season rating - ${seasonRating} guild XP - ${guildXP}`)
         await insertRaid(raid, resolvedUUIDs[0], resolvedUUIDs[1], resolvedUUIDs[2], resolvedUUIDs[3], reporter, seasonRating, guildXP);
         
         try {
