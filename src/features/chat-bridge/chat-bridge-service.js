@@ -82,6 +82,16 @@ class ChatBridgeService {
 
     async handleMinecraftMessage(client, packet) {
         const { username, message } = packet.data;
+
+        if (!this.shouldProcessMessage(username, message, client)) {
+            return null;
+        }
+
+        if (this.isDuplicateMessage(username, message)) {
+            console.log(`Duplicate message filtered: ${username}: ${message}`);
+            return null;
+        }
+
         const uuidAndName = await requestUUID(username);
         const uuid = uuidAndName.uuid;
 
@@ -92,15 +102,6 @@ class ChatBridgeService {
 
         if (!username || !message) {
             console.warn('Invalid chat message packet: missing username or message');
-            return null;
-        }
-
-        if (!this.shouldProcessMessage(username, message, client)) {
-            return null;
-        }
-
-        if (this.isDuplicateMessage(username, message)) {
-            console.log(`Duplicate message filtered: ${username}: ${message}`);
             return null;
         }
 
