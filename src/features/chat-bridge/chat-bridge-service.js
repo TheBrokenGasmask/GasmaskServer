@@ -10,10 +10,10 @@ const {analyzeAndFormatItems} = require("./encoded-item");
 class ChatBridgeService {
     constructor() {
         this.discordWebhook = new DiscordWebhook();
-        this.messageLocks = new Map();
-        this.messageData = new Map();
+        this.messageLocks = new Map(); // hash -> Promise (for mutex)
+        this.messageData = new Map(); // hash -> { status, count, clients, firstSeen }
         this.cacheExpiry = 8000; // 8 seconds
-        this.cleanupInterval = 60000; // 30 seconds
+        this.cleanupInterval = 60000; // 60 seconds
 
         this.config = config.get('chat-bridge');
         
@@ -25,8 +25,7 @@ class ChatBridgeService {
     }
 
     generateMessageHash(username, message, timestamp = null) {
-        const time = timestamp || Date.now();
-        return `${username}:${message}:${Math.floor(time / 1000)}`;
+        return `${username}:${message}`;
     }
 
     async processMessageSafely(username, message, client, timestamp = null) {

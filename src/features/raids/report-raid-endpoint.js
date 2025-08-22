@@ -8,9 +8,8 @@ class RaidReportService {
     constructor() {
         this.recentRaids = new Map();
         this.raidCache = new Map();
-        this.raidStatus = new Map();
-        this.raidOccurrences = new Map();
-        this.clientRaidMap = new Map();
+        this.raidLocks = new Map();
+        this.raidData = new Map();
         this.cacheExpiry = 45000;
         this.cleanupInterval = 90000;
         this.minClientThreshold = 1;
@@ -23,73 +22,87 @@ class RaidReportService {
     }
 
     generateRaidHash(reportKey, timestamp = null) {
-        const time = timestamp || Date.now();
-        return `${reportKey}:${Math.floor(time / 1000)}`;
+        return reportKey;
     }
 
-    shouldProcessRaid(reportKey, client, timestamp = null) {
+    async processRaidSafely(reportKey, client, timestamp = null) {
         const hash = this.generateRaidHash(reportKey, timestamp);
+        
+        if (this.raidLocks.has(hash)) {
+            await this.raidLocks.get(hash);
+        }
+        
+        let resolveLock;
+        const lockPromise = new Promise(resolve => { resolveLock = resolve; });
+        this.raidLocks.set(hash, lockPromise);
+        
+        try {
+            return await this._processRaidInternal(hash, reportKey, client);
+        } finally {
+            this.raidLocks.delete(hash);
+            resolveLock();
+        }
+    }
+
+    async _processRaidInternal(hash, reportKey, client) {
         const now = Date.now();
         
-        if (this.raidStatus.get(hash) === 'processed') {
-            return false;
-        }
-        
-        if (!this.raidOccurrences.has(hash)) {
-            this.raidOccurrences.set(hash, {
+        if (!this.raidData.has(hash)) {
+            this.raidData.set(hash, {
+                status: 'pending',
                 count: 0,
                 clients: new Set(),
-                firstSeen: now,
-                processed: false
+                firstSeen: now
             });
-            this.raidStatus.set(hash, 'pending');
         }
         
-        const raidData = this.raidOccurrences.get(hash);
+        const data = this.raidData.get(hash);
         
-        if (now - raidData.firstSeen > this.cacheExpiry) {
-            raidData.count = 0;
-            raidData.clients.clear();
-            raidData.firstSeen = now;
-            raidData.processed = false;
-            this.raidData.set(hash, 'pending');
+        if (now - data.firstSeen > this.cacheExpiry) {
+            data.status = 'pending';
+            data.count = 0;
+            data.clients.clear();
+            data.firstSeen = now;
         }
         
-        if (raidData.processed) {
-            return false;
+        if (data.status === 'processed') {
+            return { shouldProcess: false, isDuplicate: true };
         }
         
-        if (!raidData.clients.has(client)) {
-            raidData.clients.add(client);
-            raidData.count++;
+        if (!data.clients.has(client)) {
+            data.clients.add(client);
+            data.count++;
         }
         
         const threshold = config.get("minimum-client-threshold");
-        if (raidData.count >= threshold && this.raidStatus.get(hash) === 'pending') {
-            this.raidStatus.set(hash, 'processed');
-            raidData.processed = true;
-            return true;
+        if (data.count >= threshold && data.status === 'pending') {
+            data.status = 'processed';
+            return { shouldProcess: true, isDuplicate: false };
         }
         
-        return false;
+        return { shouldProcess: false, isDuplicate: false };
     }
 
-    isDuplicateRaid(reportKey, timestamp = null) {
+    async shouldProcessRaid(reportKey, client, timestamp = null) {
+        const result = await this.processRaidSafely(reportKey, client, timestamp);
+        return result.shouldProcess;
+    }
+
+    async isDuplicateRaid(reportKey, timestamp = null) {
         const hash = this.generateRaidHash(reportKey, timestamp);
         const now = Date.now();
         
-        if (this.raidOccurrences.has(hash)) {
-            const raidData = this.raidOccurrences.get(hash);
-            if (now - raidData.firstSeen > this.cacheExpiry) {
-                this.raidOccurrences.delete(hash);
-                this.raidStatus.delete(hash);
-                return false;
-            }
-            
-            return this.raidStatus.get(hash) === 'processed';
+        if (!this.raidData.has(hash)) {
+            return false;
         }
         
-        return false;
+        const data = this.raidData.get(hash);
+        
+        if (now - data.firstSeen > this.cacheExpiry) {
+            return false;
+        }
+        
+        return data.status === 'processed';
     }
 
     async handleRaidReport(client, packet) {
@@ -101,12 +114,12 @@ class RaidReportService {
 
         const reportKey = this.generateReportKey(player1, player2, player3, player4, raid);
         
-        if (!this.shouldProcessRaid(reportKey, client)) {
-            if (this.isDuplicateRaid(reportKey)) {
+        const result = await this.processRaidSafely(reportKey, client);
+        
+        if (!result.shouldProcess) {
+            if (result.isDuplicate) {
                 console.log(`Duplicate raid filtered: ${reportKey}`);
-                return null;
             }
-
             return null;
         }
 
@@ -162,17 +175,14 @@ class RaidReportService {
             const now = Date.now();
             const expiredHashes = [];
             
-            // Find expired entries
-            for (const [hash, data] of this.raidOccurrences.entries()) {
+            for (const [hash, data] of this.raidData.entries()) {
                 if (now - data.firstSeen > this.cacheExpiry) {
                     expiredHashes.push(hash);
                 }
             }
             
-            // Clean up expired entries
             expiredHashes.forEach(hash => {
-                this.raidOccurrences.delete(hash);
-                this.raidStatus.delete(hash);
+                this.raidData.delete(hash);
             });
             
             if (expiredHashes.length > 0) {
