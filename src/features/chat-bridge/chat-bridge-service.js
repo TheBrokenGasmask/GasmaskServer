@@ -10,10 +10,8 @@ const {analyzeAndFormatItems} = require("./encoded-item");
 class ChatBridgeService {
     constructor() {
         this.discordWebhook = new DiscordWebhook();
-        this.messageCache = new Map();
-        this.messageStatus = new Map();
-        this.messageOccurrences = new Map();
-        this.clientMessageMap = new Map();
+        this.messageLocks = new Map();
+        this.messageData = new Map();
         this.cacheExpiry = 8000; // 8 seconds
         this.cleanupInterval = 60000; // 30 seconds
 
@@ -31,78 +29,94 @@ class ChatBridgeService {
         return `${username}:${message}:${Math.floor(time / 1000)}`;
     }
 
-    shouldProcessMessage(username, message, client, timestamp = null) {
+    async processMessageSafely(username, message, client, timestamp = null) {
         const hash = this.generateMessageHash(username, message, timestamp);
+        
+        if (this.messageLocks.has(hash)) {
+            await this.messageLocks.get(hash);
+        }
+        
+        let resolveLock;
+        const lockPromise = new Promise(resolve => { resolveLock = resolve; });
+        this.messageLocks.set(hash, lockPromise);
+        
+        try {
+            return await this._processMessageInternal(hash, username, message, client);
+        } finally {
+            this.messageLocks.delete(hash);
+            resolveLock();
+        }
+    }
+
+    async _processMessageInternal(hash, username, message, client) {
         const now = Date.now();
         
-        if (this.messageStatus.get(hash) === 'processed') {
-            return false;
-        }
-        
-        if (!this.messageOccurrences.has(hash)) {
-            this.messageOccurrences.set(hash, {
+        if (!this.messageData.has(hash)) {
+            this.messageData.set(hash, {
+                status: 'pending',
                 count: 0,
                 clients: new Set(),
-                firstSeen: now,
-                processed: false
+                firstSeen: now
             });
-            this.messageStatus.set(hash, 'pending');
         }
         
-        const messageData = this.messageOccurrences.get(hash);
+        const data = this.messageData.get(hash);
         
-        if (now - messageData.firstSeen > this.cacheExpiry) {
-            messageData.count = 0;
-            messageData.clients.clear();
-            messageData.firstSeen = now;
-            messageData.processed = false;
-            this.messageStatus.set(hash, 'pending');
+        if (now - data.firstSeen > this.cacheExpiry) {
+            data.status = 'pending';
+            data.count = 0;
+            data.clients.clear();
+            data.firstSeen = now;
         }
         
-        if (messageData.processed) {
-            return false;
+        if (data.status === 'processed') {
+            return { shouldProcess: false, isDuplicate: true };
         }
         
-        if (!messageData.clients.has(client)) {
-            messageData.clients.add(client);
-            messageData.count++;
+        if (!data.clients.has(client)) {
+            data.clients.add(client);
+            data.count++;
         }
         
         const threshold = config.get("minimum-client-threshold");
-        if (messageData.count >= threshold && this.messageStatus.get(hash) === 'pending') {
-            this.messageStatus.set(hash, 'processed');
-            messageData.processed = true;
-            return true;
+        if (data.count >= threshold && data.status === 'pending') {
+            data.status = 'processed';
+            return { shouldProcess: true, isDuplicate: false };
         }
         
-        return false;
+        return { shouldProcess: false, isDuplicate: false };
     }
 
-    isDuplicateMessage(username, message, timestamp = null) {
+    async shouldProcessMessage(username, message, client, timestamp = null) {
+        const result = await this.processMessageSafely(username, message, client, timestamp);
+        return result.shouldProcess;
+    }
+
+    async isDuplicateMessage(username, message, timestamp = null) {
         const hash = this.generateMessageHash(username, message, timestamp);
         const now = Date.now();
         
-        if (this.messageOccurrences.has(hash)) {
-            const messageData = this.messageOccurrences.get(hash);
-            if (now - messageData.firstSeen > this.cacheExpiry) {
-                this.messageOccurrences.delete(hash);
-                this.messageStatus.delete(hash);
-                return false;
-            }
-            
-            return this.messageStatus.get(hash) === 'processed';
+        if (!this.messageData.has(hash)) {
+            return false;
         }
         
-        return false;
+        const data = this.messageData.get(hash);
+        
+        if (now - data.firstSeen > this.cacheExpiry) {
+            return false;
+        }
+        
+        return data.status === 'processed';
     }
 
     async handleMinecraftMessage(client, packet) {
         const { username, message } = packet.data;
 
-        if (!this.shouldProcessMessage(username, message, client)) {
-            if (this.isDuplicateMessage(username, message)) {
+        const result = await this.processMessageSafely(username, message, client);
+        
+        if (!result.shouldProcess) {
+            if (result.isDuplicate) {
                 console.log(`Duplicate message filtered: ${username}: ${message}`);
-                return null;
             }
             return null;
         }
@@ -212,15 +226,14 @@ class ChatBridgeService {
             const now = Date.now();
             const expiredHashes = [];
             
-            for (const [hash, data] of this.messageOccurrences.entries()) {
+            for (const [hash, data] of this.messageData.entries()) {
                 if (now - data.firstSeen > this.cacheExpiry) {
                     expiredHashes.push(hash);
                 }
             }
             
             expiredHashes.forEach(hash => {
-                this.messageOccurrences.delete(hash);
-                this.messageStatus.delete(hash);
+                this.messageData.delete(hash);
             });
             
             if (expiredHashes.length > 0) {
