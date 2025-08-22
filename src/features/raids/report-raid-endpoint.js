@@ -133,6 +133,7 @@ class RaidReportService {
         
         try {
             console.log(`Sent Discord notification for raid: ${raid}`);
+            await sendRaidEmbed(raid, player1, player2, player3, player4);
         } catch (error) {
             console.error(`Failed to send Discord notification for raid ${raid}:`, error);
         }
