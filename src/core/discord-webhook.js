@@ -73,7 +73,8 @@ class DiscordWebhook {
         
         let payload = {
             username: username,
-            avatar_url: avatarUrl
+            avatar_url: avatarUrl,
+            allowed_mentions: { "parse": [] }
         };
 
         if (typeof messageData === 'string') {
