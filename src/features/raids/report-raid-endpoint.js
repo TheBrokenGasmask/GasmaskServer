@@ -8,6 +8,7 @@ class RaidReportService {
     constructor() {
         this.recentRaids = new Map();
         this.raidCache = new Map();
+        this.raidStatus = new Map();
         this.raidOccurrences = new Map();
         this.clientRaidMap = new Map();
         this.cacheExpiry = 45000;
@@ -26,53 +27,68 @@ class RaidReportService {
         return `${reportKey}:${Math.floor(time / 1000)}`;
     }
 
-    isDuplicateRaid(reportKey, timestamp = null) {
-        const hash = this.generateRaidHash(reportKey, timestamp);
-        
-        if (this.raidCache.has(hash)) {
-            return true;
-        }
-        
-        this.raidCache.set(hash, Date.now());
-        return false;
-    }
-
     shouldProcessRaid(reportKey, client, timestamp = null) {
         const hash = this.generateRaidHash(reportKey, timestamp);
+        const now = Date.now();
+        
+        if (this.raidStatus.get(hash) === 'processed') {
+            return false;
+        }
         
         if (!this.raidOccurrences.has(hash)) {
             this.raidOccurrences.set(hash, {
                 count: 0,
                 clients: new Set(),
-                firstSeen: Date.now(),
+                firstSeen: now,
                 processed: false
             });
+            this.raidStatus.set(hash, 'pending');
         }
-
+        
         const raidData = this.raidOccurrences.get(hash);
         
-        const now = Date.now();
         if (now - raidData.firstSeen > this.cacheExpiry) {
             raidData.count = 0;
             raidData.clients.clear();
             raidData.firstSeen = now;
             raidData.processed = false;
+            this.raidData.set(hash, 'pending');
         }
         
         if (raidData.processed) {
             return false;
         }
-
+        
         if (!raidData.clients.has(client)) {
             raidData.clients.add(client);
             raidData.count++;
         }
-
-        if (raidData.count >= config.get("minimum-client-threshold")) {
+        
+        const threshold = config.get("minimum-client-threshold");
+        if (raidData.count >= threshold && this.raidStatus.get(hash) === 'pending') {
+            this.raidStatus.set(hash, 'processed');
             raidData.processed = true;
             return true;
         }
+        
+        return false;
+    }
 
+    isDuplicateRaid(reportKey, timestamp = null) {
+        const hash = this.generateRaidHash(reportKey, timestamp);
+        const now = Date.now();
+        
+        if (this.raidOccurrences.has(hash)) {
+            const raidData = this.raidOccurrences.get(hash);
+            if (now - raidData.firstSeen > this.cacheExpiry) {
+                this.raidOccurrences.delete(hash);
+                this.raidStatus.delete(hash);
+                return false;
+            }
+            
+            return this.raidStatus.get(hash) === 'processed';
+        }
+        
         return false;
     }
 
@@ -86,11 +102,11 @@ class RaidReportService {
         const reportKey = this.generateReportKey(player1, player2, player3, player4, raid);
         
         if (!this.shouldProcessRaid(reportKey, client)) {
-            return null;
-        }
+            if (this.isDuplicateRaid(reportKey)) {
+                console.log(`Duplicate raid filtered: ${reportKey}`);
+                return null;
+            }
 
-        if (this.isDuplicateRaid(reportKey)) {
-            console.log(`Duplicate raid filtered: ${reportKey}`);
             return null;
         }
 
@@ -103,7 +119,6 @@ class RaidReportService {
                 timestamp: Date.now()
             }
         };
-        
     }
 
     async processRaidReport(raid, player1, player2, player3, player4, seasonRating, guildXP, reporter) {
@@ -145,26 +160,23 @@ class RaidReportService {
     startCleanup() {
         setInterval(() => {
             const now = Date.now();
-            const expiredEntries = [];
-            const expiredOccurrences = [];
+            const expiredHashes = [];
             
-            for (const [hash, timestamp] of this.raidCache.entries()) {
-                if (now - timestamp > this.cacheExpiry) {
-                    expiredEntries.push(hash);
-                }
-            }
-
+            // Find expired entries
             for (const [hash, data] of this.raidOccurrences.entries()) {
                 if (now - data.firstSeen > this.cacheExpiry) {
-                    expiredOccurrences.push(hash);
+                    expiredHashes.push(hash);
                 }
             }
             
-            expiredEntries.forEach(hash => this.raidCache.delete(hash));
-            expiredOccurrences.forEach(hash => this.raidOccurrences.delete(hash));
+            // Clean up expired entries
+            expiredHashes.forEach(hash => {
+                this.raidOccurrences.delete(hash);
+                this.raidStatus.delete(hash);
+            });
             
-            if (expiredEntries.length > 0) {
-                console.log(`Cleaned up ${expiredEntries.length} expired raid cache entries and ${expiredOccurrences.length} raid occurrences`);
+            if (expiredHashes.length > 0) {
+                console.log(`Cleaned up ${expiredHashes.length} expired raid entries`);
             }
         }, this.cleanupInterval);
     }
