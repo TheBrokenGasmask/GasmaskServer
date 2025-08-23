@@ -1,6 +1,7 @@
 const {getToken} = require("../auth/authentication");
 const {insertRaid, getPlayerUUID, insertPlayer} = require("../../core/database");
 const {requestUUID} = require("../../core/utilities");
+const {isPlayerInGuild} = require('../player/wynn-api');
 const {sendRaidEmbed} = require("./raid-message");
 const { config } = require("../../core/config");
 
@@ -142,12 +143,17 @@ class RaidReportService {
         for (let i = 0; i < players.length; i++) {
             const player = players[i];
             let uuid = await getPlayerUUID(player);
-
+            
             if (!uuid) {
                 uuid = await requestUUID(player);
             }
 
             if (!uuid) {
+                throw new Error(`Invalid player: ${player}`);
+            }
+
+            if (!await isPlayerInGuild(uuid)) {
+                console.log(`Player ${player} is not in guild, aborting raid report`);
                 throw new Error(`Invalid player: ${player}`);
             }
 
