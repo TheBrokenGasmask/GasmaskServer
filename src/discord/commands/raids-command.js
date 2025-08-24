@@ -31,9 +31,11 @@ module.exports = {
 
         let raidCounts = [0, 0, 0, 0]
         let raidsData = await getRaids(uuid, daysToTimestamp((days) ? days : -1));
+        let totalRaids = 0
         for (let i = 0; i < raidsData.length; i++) {
             let raidIndex = raidsData[i].raid;
             raidCounts[raidIndex]++;
+            totalRaids++;
         }
 
         const response = await axios.get(`https://crafatar.com/renders/head/${uuid}?overlay=true`, { responseType: 'arraybuffer' });
@@ -52,7 +54,10 @@ module.exports = {
                 { name: "Orphion's Nexus of Light", value: `\`\`\`Completions: ${raidCounts[1].toString()}   \`\`\``, inline: true },
                 { name: '\u200B', value: '\u200B'},
                 { name: 'The Canyon Colossus', value: `\`\`\`Completions: ${raidCounts[2].toString()}   \`\`\``, inline: true },
-                { name: 'The Nameless Anomaly', value: `\`\`\`Completions: ${raidCounts[3].toString()}   \`\`\``, inline: true }
+                { name: 'The Nameless Anomaly', value: `\`\`\`Completions: ${raidCounts[3].toString()}   \`\`\``, inline: true },
+                { name: '\u200B', value: '\u200B'},
+                { name: 'All Raids', value: `\`\`\`Completions: ${totalRaids.toString()}   \`\`\``, inline: true },
+                { name: '\u200B', value: '\u200B', inline: true }
             )
 
         await interaction.reply({ embeds: [exampleEmbed], files: [attachment] });
