@@ -21,7 +21,7 @@ function addPlayerToQueue(uuid) {
 }
 
 function initQueue() {
-    setInterval(processQueue, 10000);
+    setInterval(processQueue, 120000);
 
     getPlayers().then(players => {
         players.forEach(player => {
