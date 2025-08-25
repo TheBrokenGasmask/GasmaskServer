@@ -111,12 +111,10 @@ class WebSocketManager {
         const client = this.connections.get(clientId);
         if (!client) return;
 
-        // Clear any existing timer
         if (client.heartbeatTimer) {
             clearInterval(client.heartbeatTimer);
         }
 
-        // Set up heartbeat monitoring
         client.heartbeatTimer = setInterval(() => {
             const currentClient = this.connections.get(clientId);
             if (!currentClient) {
@@ -127,7 +125,6 @@ class WebSocketManager {
             const now = Date.now();
             const timeSinceLastHeartbeat = now - currentClient.lastHeartbeat;
 
-            // Check if client has been unresponsive
             if (timeSinceLastHeartbeat > this.heartbeatTimeout + this.heartbeatInterval) {
                 console.log(`Client ${clientId} (${currentClient.uuid}) heartbeat timeout, disconnecting`);
                 this.disconnectClient(clientId, 'Heartbeat timeout');
@@ -151,10 +148,8 @@ class WebSocketManager {
                 return;
             }
 
-            // Update heartbeat timestamp for any message
             client.lastHeartbeat = Date.now();
 
-            // Handle heartbeat packets
             if (packet.type === 'heartbeat') {
                 this.sendMessage(client.ws, 'heartbeat_response', {
                     timestamp: Date.now(),
@@ -162,9 +157,6 @@ class WebSocketManager {
                 });
                 return;
             }
-
-            // Don't validate tokens on every message - trust the authenticated connection
-            // Token validation was causing disconnections during normal operation
 
             console.log(`Packet from ${clientId} (${client.uuid || 'unauthenticated'}):`, packet);
             const response = await this.packetHandler.handlePacket(client, packet);

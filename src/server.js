@@ -14,6 +14,7 @@ const {PlayersEndpoint} = require("./features/player/players-endpoint");
 const { badgesService } = require("./features/badges/badges-service");
 const { config } = require("./core/config");
 const {websocketInit} = require("./features/websocket/websocket");
+const {initializeGuildCache} = require('./features/player/guild-cache');
 
 const app = express();
 const server = http.createServer(app);
@@ -26,6 +27,7 @@ server.listen(PORT, '0.0.0.0', async (error) => {
     await databaseInit();
     registerEndpoints(app);
     await initQueue();
+    await initializeGuildCache();
     websocketInit(server);
     
     badgesService.initialize().then(() => {

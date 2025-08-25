@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const tokenMap = new Map();
 const wsTokenLookup = new Map();
 const mojangServerIds = new Map();
-const TOKEN_EXPIRY_TIME = 6 * 60 * 60 * 1000;
+const TOKEN_EXPIRY_TIME = 7 * 60 * 60 * 1000;
 const VALIDATION_CACHE_TIME = 30 * 60 * 1000;
 
 function addUser(uuid, wsToken, serverId = null) {

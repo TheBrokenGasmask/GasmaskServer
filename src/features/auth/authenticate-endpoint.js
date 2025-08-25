@@ -1,4 +1,4 @@
-const {getGuildRank, isPlayerInGuild} = require('../player/wynn-api')
+const {getMemberByUuid} = require('../player/guild-cache')
 const {generateTokenWithServerId, getToken, removeToken, authenticateServerId} = require("./authentication");
 const {sleep} = require("../../core/utilities");
 const request = require('request');
@@ -12,7 +12,7 @@ class AuthenticateEndpoint {
         let {uuid} = req.query;
 
         try {
-            if (!await isPlayerInGuild(uuid)) {
+            if (!await getMemberByUuid(uuid)) {
                 return res.status(403).send("Player is not in the guild");
             }
 

@@ -1,6 +1,25 @@
 const request = require('request');
 const { config } = require("../../core/config");
 
+function getWynnGuild(){
+    return new Promise((resolve, reject) => {
+        const options = {
+            url: `https://api.wynncraft.com/v3/guild/prefix/${config.get("guild-tag")}?identifier=uuid`,
+            headers: {
+                Authorization: `Bearer ${config.get("wynncraft-token")}`
+            }
+        };
+
+        request(options, function (error, response, body) {
+            if (!error && response.statusCode === 200) {
+                resolve(JSON.parse(body));
+            } else {
+                const msg = error ? error.message : `Status ${response.statusCode}, Body: ${body}`;
+                reject(new Error('WynnAPI request failed: ' + msg));
+            }
+        });
+    });
+}
 function getWynnUser(uuid) {
     return new Promise((resolve, reject) => {
         const options = {
@@ -79,4 +98,4 @@ async function isPlayerInGuild(uuid) {
     }
 }
 
-module.exports = {getGuildRank, isPlayerInGuild, getPlayerGuild, getPlayerGuildInfo};
+module.exports = {getGuildRank, isPlayerInGuild, getPlayerGuild, getPlayerGuildInfo, getWynnGuild};

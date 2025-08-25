@@ -1,5 +1,5 @@
 const {getToken, getAuthenticationStatus, validateToken} = require("./authentication");
-const {getGuildRank, isPlayerInGuild} = require('../player/wynn-api');
+const {getMemberByUuid} = require('../player/guild-cache');
 const { config } = require("../../core/config");
 
 class IsAuthenticatedEndpoint {
@@ -72,7 +72,7 @@ class IsAuthenticatedEndpoint {
 
     async validatePlayerStatus(uuid) {
         try {
-            if (!await isPlayerInGuild(uuid)) {
+            if (!await getMemberByUuid(uuid)) {
                 console.log(`Player ${uuid} is no longer in the guild`);
                 return { valid: false, reason: 'Player not in guild' };
             }
