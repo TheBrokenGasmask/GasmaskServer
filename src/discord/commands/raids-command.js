@@ -38,16 +38,13 @@ module.exports = {
             raidCounts[raidIndex]++;
             totalRaids++;
         }
-
-        const response = await axios.get(`https://crafatar.com/renders/head/${uuid}?overlay=true`, { responseType: 'arraybuffer' });
-        const buffer = Buffer.from(response.data, 'binary');
         
         const cardBuffer = await createRaidCard(uuid, playerName, raidCounts, totalRaids, days);
 
         const attachment = new AttachmentBuilder(cardBuffer, { 
             name: 'raid-card.png' 
         });
-        
+
         await interaction.reply({files: [attachment] });
     },
 };
