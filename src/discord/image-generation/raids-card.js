@@ -53,7 +53,7 @@ async function createRaidCard(uuid, playerName, raidCounts, totalRaids, days = n
     context.fillText(`${raidCounts[0] ?? 0}`, 310, 215);
     context.fillText(`${raidCounts[2] ?? 0}`, 310, 305);
     context.fillText(`${raidCounts[1] ?? 0}`, 500, 215);
-    context.fillText(`${raidCounts[4] ?? 0}`, 500, 305);
+    context.fillText(`${raidCounts[3] ?? 0}`, 500, 305);
     return canvas.toBuffer('image/png');
 }
 
