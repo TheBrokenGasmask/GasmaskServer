@@ -2,6 +2,7 @@ const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require("discor
 const axios = require('axios');
 const {getPlayerUUID, getRaids, getPlayerUsername} = require("../../core/database");
 const {daysToTimestamp} = require("../../core/utilities");
+const {createRaidCard} = require("../../discord/image-generation/raids-card");
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -40,26 +41,13 @@ module.exports = {
 
         const response = await axios.get(`https://crafatar.com/renders/head/${uuid}?overlay=true`, { responseType: 'arraybuffer' });
         const buffer = Buffer.from(response.data, 'binary');
-        const attachment = new AttachmentBuilder(buffer, { name: 'thumbnail.png' });
+        
+        const cardBuffer = await createRaidCard(uuid, playerName, raidCounts, totalRaids, days);
 
-        const exampleEmbed = new EmbedBuilder()
-            .setColor(0x0099FF)
-            .setAuthor({ name: 'Player Guild Raid Stats' })
-            .setTitle(`**${playerName}**`)
-            .setThumbnail('attachment://thumbnail.png')
-            .setDescription(`*${days ? `Last ${days} Day` + (days !== 1 ? "s" : "") : 'All Time'}*`)
-            .addFields(
-                { name: '\u200B', value: '\u200B' },
-                { name: 'Nest of the Grootslangs', value: `\`\`\`Completions: ${raidCounts[0].toString()}   \`\`\``, inline: true },
-                { name: "Orphion's Nexus of Light", value: `\`\`\`Completions: ${raidCounts[1].toString()}   \`\`\``, inline: true },
-                { name: '\u200B', value: '\u200B'},
-                { name: 'The Canyon Colossus', value: `\`\`\`Completions: ${raidCounts[2].toString()}   \`\`\``, inline: true },
-                { name: 'The Nameless Anomaly', value: `\`\`\`Completions: ${raidCounts[3].toString()}   \`\`\``, inline: true },
-                { name: '\u200B', value: '\u200B'},
-                { name: 'All Raids', value: `\`\`\`Completions: ${totalRaids.toString()}   \`\`\``, inline: true },
-                { name: '\u200B', value: '\u200B', inline: true }
-            )
-
-        await interaction.reply({ embeds: [exampleEmbed], files: [attachment] });
+        const attachment = new AttachmentBuilder(cardBuffer, { 
+            name: 'raid-card.png' 
+        });
+        
+        await interaction.reply({files: [attachment] });
     },
 };

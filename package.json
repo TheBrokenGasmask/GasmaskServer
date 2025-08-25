@@ -11,6 +11,7 @@
   "author": "wiji",
   "license": "ISC",
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.77",
     "axios": "^1.7.7",
     "discord.js": "^14.16.2",
     "express": "^4.21.2",
