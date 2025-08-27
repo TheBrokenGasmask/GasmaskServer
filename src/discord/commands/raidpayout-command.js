@@ -106,30 +106,27 @@ module.exports = {
 
             const calculateResetRange = () => {
                 const now = new Date();
-                
                 const currentUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes());
-                
                 let endFriday = new Date(currentUTC);
                 const currentDay = endFriday.getUTCDay();
                 const daysToSubtract = currentDay <= 5 ? (currentDay + 2) % 7 : 1;
-                
                 endFriday.setUTCDate(endFriday.getUTCDate() - daysToSubtract);
                 endFriday.setUTCHours(18, 0, 0, 0);
-                
+
                 if (currentUTC < endFriday) {
                     endFriday.setUTCDate(endFriday.getUTCDate() - 7);
                 }
                 
+                endFriday.setUTCDate(endFriday.getUTCDate() - 7);
                 const startFriday = new Date(endFriday);
                 startFriday.setUTCDate(endFriday.getUTCDate() - 7);
                 startFriday.setUTCHours(17, 59, 0, 0);
+                const formatForMySQL = (date) => {
+                    return date.toISOString().slice(0, 19).replace('T', ' ');
+                };
                 
-                const startTimestamp = Math.floor(startFriday.getTime() / 1000);
-                const endTimestamp = Math.floor(endFriday.getTime() / 1000);
-                
-                console.log(`Raid period: ${startFriday.toISOString()} to ${endFriday.toISOString()}`);
-                console.log(`Unix timestamps: ${startTimestamp} to ${endTimestamp}`);
-                
+                const startTimestamp = formatForMySQL(startFriday);
+                const endTimestamp = formatForMySQL(endFriday);
                 return { startTimestamp, endTimestamp };
             };
             const { startTimestamp, endTimestamp } = calculateResetRange();
