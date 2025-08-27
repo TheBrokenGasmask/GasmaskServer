@@ -107,28 +107,31 @@ module.exports = {
             const calculateResetRange = () => {
                 const now = new Date();
                 
-                const estOffset = -5 * 60;
-                const nowEST = new Date(now.getTime() + (estOffset * 60 * 1000));
+                const currentUTC = new Date(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), now.getUTCHours(), now.getUTCMinutes());
                 
-                let endFriday = new Date(nowEST);
-                const daysSinceLastFriday = (nowEST.getDay() + 2) % 7;
-                endFriday.setDate(nowEST.getDate() - daysSinceLastFriday);
-                endFriday.setHours(13, 0, 0, 0);
+                let endFriday = new Date(currentUTC);
+                const currentDay = endFriday.getUTCDay();
+                const daysToSubtract = currentDay <= 5 ? (currentDay + 2) % 7 : 1;
                 
-                if (nowEST < endFriday) {
-                    endFriday.setDate(endFriday.getDate() - 7);
+                endFriday.setUTCDate(endFriday.getUTCDate() - daysToSubtract);
+                endFriday.setUTCHours(18, 0, 0, 0);
+                
+                if (currentUTC < endFriday) {
+                    endFriday.setUTCDate(endFriday.getUTCDate() - 7);
                 }
                 
                 const startFriday = new Date(endFriday);
-                startFriday.setDate(endFriday.getDate() - 7);
-                startFriday.setHours(12, 59, 0, 0);
+                startFriday.setUTCDate(endFriday.getUTCDate() - 7);
+                startFriday.setUTCHours(17, 59, 0, 0);
                 
-                const startTimestamp = Math.floor(startFriday.getTime() / 1000) - (estOffset * 60);
-                const endTimestamp = Math.floor(endFriday.getTime() / 1000) - (estOffset * 60);
+                const startTimestamp = Math.floor(startFriday.getTime() / 1000);
+                const endTimestamp = Math.floor(endFriday.getTime() / 1000);
+                
+                console.log(`Raid period: ${startFriday.toISOString()} to ${endFriday.toISOString()}`);
+                console.log(`Unix timestamps: ${startTimestamp} to ${endTimestamp}`);
                 
                 return { startTimestamp, endTimestamp };
             };
-
             const { startTimestamp, endTimestamp } = calculateResetRange();
 
             const membersWithRaids = await Promise.all(
