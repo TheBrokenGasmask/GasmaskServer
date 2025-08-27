@@ -335,30 +335,33 @@ async function getRaids(uuid, startTimestamp = null, endTimestamp = null) {
     return [];
 }
 
-async function getRaidCount(raidId = null, timestamp = null) {
+async function getRaidCount(raidId = null, startTimestamp = null, endTimestamp = null) {
     try {
         const connection = await pool.getConnection();
-        
+                
         let query = `SELECT COUNT(*) as count FROM raids`;
         const params = [];
         const conditions = [];
-        
+                
         if (raidId !== null) {
             conditions.push(`raid = ?`);
             params.push(raidId);
         }
-        
-        if (timestamp) {
+                
+        if (startTimestamp && endTimestamp) {
+            conditions.push(`time BETWEEN ? AND ?`);
+            params.push(startTimestamp, endTimestamp);
+        } else if (startTimestamp) {
             conditions.push(`time > ?`);
-            params.push(timestamp);
+            params.push(startTimestamp);
         }
-        
+                
         if (conditions.length > 0) {
             query += ` WHERE ${conditions.join(' AND ')}`;
         }
-        
+                
         const [rows] = await connection.execute(query, params);
-        
+                
         connection.release();
         return rows[0].count;
     } catch (err) {

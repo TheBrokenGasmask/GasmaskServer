@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getPlayerUsername, getOwedAspects, getRaids, getPlayersByGuild} = require("../../core/database");
+const { getPlayerUsername, getRaidCount, getRaids, getPlayersByGuild} = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 const {getGuildCache} = require("../../features/player/guild-cache");
 const { rankService } = require("../../features/ranks/rank-service");
@@ -36,6 +36,20 @@ module.exports = {
         const officerPay = parseFloat(interaction.options.getString('officer'));
         const advisorPay = parseFloat(interaction.options.getString('advisor'));
         try{
+            const alertConfig = config.get('alert-command');
+            const requiredRoleId = alertConfig['required-role-id'];
+            
+            if (requiredRoleId && !interaction.member.roles.cache.has(requiredRoleId)) {
+                const noPermissionEmbed = new EmbedBuilder()
+                    .setColor(0xFF4444)
+                    .setTitle('❌ Permission Denied')
+                    .setDescription('You do not have permission to use this command.')
+                    .setTimestamp();
+                
+                await interaction.reply({ embeds: [noPermissionEmbed], ephemeral: true });
+                return;
+            }
+
             let guildCache = getGuildCache();
 
             if (!guildCache || !guildCache.members) {
@@ -209,7 +223,7 @@ module.exports = {
                 return a.username.localeCompare(b.username);
             });
 
-            const totalRaids = membersWithFinalPayouts.reduce((sum, member) => sum + member.raidCount, 0);
+            const totalRaids =  await getRaidCount(null, startTimestamp, endTimestamp);
             const totalLE = membersWithFinalPayouts.reduce((sum, member) => sum + member.totalLE, 0);
             
             const memberPayouts = membersWithFinalPayouts
@@ -233,7 +247,7 @@ module.exports = {
             } catch (error) {
                 console.error('Error deleting reply:', error);
             }
-            //await interaction.channel.send({ content: `<@&1220555684362457138>` });
+            await interaction.channel.send({ content: `<@&1220555684362457138>` });
             await interaction.channel.send({files: [attachment] });
             await interaction.channel.send({ content: plaintextList });
 
