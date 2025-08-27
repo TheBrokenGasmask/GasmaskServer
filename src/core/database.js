@@ -306,7 +306,7 @@ async function updateUsername(uuid) {
     }
 }
 
-async function getRaids(uuid, timestamp = null) {
+async function getRaids(uuid, startTimestamp = null, endTimestamp = null) {
     try {
         const connection = await pool.getConnection();
 
@@ -317,9 +317,12 @@ async function getRaids(uuid, timestamp = null) {
 
         const params = [uuid, uuid, uuid, uuid];
 
-        if (timestamp) {
+        if (startTimestamp && endTimestamp) {
+            query += ` AND time BETWEEN ? AND ?`;
+            params.push(startTimestamp, endTimestamp);
+        } else if (startTimestamp) {
             query += ` AND time > ?`;
-            params.push(timestamp);
+            params.push(startTimestamp);
         }
 
         const [rows] = await connection.execute(query, params);
