@@ -37,7 +37,7 @@ module.exports = {
         const advisorPay = parseFloat(interaction.options.getString('advisor'));
         try{
             const alertConfig = config.get('alert-command');
-            /*const requiredRoleId = alertConfig['required-role-id'];
+            const requiredRoleId = alertConfig['required-role-id'];
 
             if (requiredRoleId && !interaction.member.roles.cache.has(requiredRoleId)) {
                 const noPermissionEmbed = new EmbedBuilder()
@@ -48,7 +48,7 @@ module.exports = {
                 
                 await interaction.reply({ embeds: [noPermissionEmbed], ephemeral: true });
                 return;
-            }*/
+            }
 
             let guildCache = getGuildCache();
 
