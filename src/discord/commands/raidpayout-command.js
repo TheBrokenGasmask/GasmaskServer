@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { getPlayerUsername, getRaidCount, getRaids, getPlayersByGuild} = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 const {getGuildCache} = require("../../features/player/guild-cache");
