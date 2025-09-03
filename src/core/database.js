@@ -43,6 +43,20 @@ async function createTables() {
 
         await connection.execute(createRaidTableQuery);
 
+        const createWarTableQuery = `
+            CREATE TABLE IF NOT EXISTS wars (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player VARCHAR(36) NOT NULL,
+                time_in_war DOUBLE NOT NULL,
+                tower_ehp DOUBLE NOT NULL,
+                tower_dps DOUBLE NOT NULL,
+                territory VARCHAR(100) NOT NULL,
+                owner_guild VARCHAR(36) NOT NULL
+            );
+        `;
+
+        await connection.execute(createWarTableQuery);
+
         const createPlayerTableQuery = `
             CREATE TABLE IF NOT EXISTS players (
                 uuid VARCHAR(36) NOT NULL PRIMARY KEY,
@@ -148,6 +162,22 @@ async function insertRaid(raid, player1, player2, player3, player4, reporter, se
         connection.release();
     } catch (err) {
         console.error("Error inserting raid: ", err);
+    }
+}
+
+async function insertWar(player, timeInWar, towerEhp, towerDps, territory, ownerGuild) {
+    try {
+        const connection =  await pool.getConnection();
+
+        const insertQuery = `
+            INSERT INTO wars (player, time_in_war, tower_ehp, tower_dps, territory, owner_guild)
+            VALUES (?, ?, ?, ?, ?, ?);
+            
+        `;
+
+        await connection.execute(insertQuery, [player, timeInWar, towerEhp, towerDps, territory, ownerGuild]);
+    } catch (err) {
+        console.error("Error inserting war: ", err);
     }
 }
 
@@ -891,6 +921,6 @@ async function getPlayerByDiscordId(discordId) {
     }
 }
 
-module.exports = { databaseInit, insertRaid, insertAspect, getGXPLeaderboard, getPlayerUUID,
+module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getRaidCount, getAspects, getOwedAspects, getLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId };

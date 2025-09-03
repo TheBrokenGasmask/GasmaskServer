@@ -14,6 +14,8 @@ const PACKET_TYPES = {
     CHAT_ANNOUNCEMENT: 'chat_announcement',
     RAID_REPORT: 'raid_report',
     RAID_REPORT_ACK: 'raid_report_ack',
+    WAR_REPORT: 'war_report',
+    WAR_REPORT_ACK: 'war_report_ack',
     CONNECT: 'connect',
     DISCONNECT: 'disconnect',
     PONG: 'pong',
@@ -35,6 +37,11 @@ const raidReportHandler = async (client, packet) => {
     const { raidReport } = require('../raids/report-raid-endpoint');
     return await raidReport.handleRaidReport(client, packet);
 };
+
+const warReportHandler = async (client, packet) => {
+    const { warReport } = require('../wars/report-war-endpoint');
+    return await warReport.handleWarReport(client, packet);
+}
 
 const heartbeatHandler = async (client, packet) => {
     client.lastHeartbeat = Date.now();
@@ -103,6 +110,7 @@ const PACKET_HANDLERS = {
     [PACKET_TYPES.HEARTBEAT]: heartbeatHandler,
     [PACKET_TYPES.CHAT_MESSAGE]: chatMessageHandler,
     [PACKET_TYPES.RAID_REPORT]: raidReportHandler,
+    [PACKET_TYPES.WAR_REPORT]: warReportHandler,
     [PACKET_TYPES.RANK_PROMOTION_RESPONSE]: rankPromotionResponseHandler,
     [PACKET_TYPES.CHAT_ANNOUNCEMENT]: chatAnnouncementHandler,
     [PACKET_TYPES.CONNECT]: connectHandler,
@@ -116,6 +124,7 @@ module.exports = {
     heartbeatHandler,
     chatMessageHandler,
     raidReportHandler,
+    warReportHandler,
     rankPromotionResponseHandler,
     chatAnnouncementHandler,
     connectHandler,
