@@ -1,11 +1,18 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getPlayerUsername, getGXPLeaderboard } = require("../../core/database");
-const { raids, daysToTimestamp, getLastPoolReset } = require("../../core/utilities");
+const { getPlayerUsername, getWarLeaderboard} = require("../../core/database");
+const {daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
+const {warService, Difficulty} = require("../../features/wars/report-war-endpoint");
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('gxp')
-        .setDescription('Returns guild XP rankings')
+        .setName('war-leaderboard')
+        .setDescription('Returns war leaderboard rankings')
+        .addStringOption(option =>
+            option.setName('type')
+                .setDescription('The type of leaderboard to display')
+                .setRequired(true)
+                .addChoices(...getChoices())
+        )
         .addStringOption(option =>
             option.setName('period')
                 .setDescription('The time period for the leaderboard')
@@ -28,7 +35,7 @@ module.exports = {
         let periodDescription;
 
         if (period === 'thisweek') {
-            timestamp = getLastPoolReset();
+            timestamp = getLastPoolReset()
             periodDescription = 'This Week';
         } else if (period === 'lastweek') {
             timestamp = getLastPoolReset(1);
@@ -42,12 +49,15 @@ module.exports = {
             periodDescription = 'All Time';
         }
 
-        let leaderData = await getGXPLeaderboard(timestamp);
+        let difficultyIndex = interaction.options.getString('type');
+        difficultyIndex = parseInt(difficultyIndex);
+
+        let leaderData = await getWarLeaderboard(difficultyIndex, timestamp);
         let fields = [];
 
-        for (const [uuid, gxp] of leaderData) {
+        for (const [uuid, warCount] of leaderData) {
             let playerName = await getPlayerUsername(uuid);
-            fields.push({ name: playerName, value: `\`\`\`${this.getAbreviatedNumber(gxp)}\`\`\``});
+            fields.push({ name: playerName, value: `\`\`\`${warCount}\`\`\``});
         }
 
         const itemsPerPage = 10;
@@ -59,8 +69,8 @@ module.exports = {
 
             return new EmbedBuilder()
                 .setColor(0x0099FF)
-                .setTitle("Guild XP")
-                .setAuthor({ name: 'Guild Raid Leaderboard' })
+                .setTitle(getDifficultyName(difficultyIndex))
+                .setAuthor({ name: 'War Leaderboard' })
                 .setDescription(`*${periodDescription}*`)
                 .addFields(...currentFields)
                 .setFooter({ text: `Page ${page + 1} of ${totalPages}` });
@@ -103,11 +113,19 @@ module.exports = {
             });
         }
     },
-
-    getAbreviatedNumber(number) {
-        if (number >= 1000000000) return (number / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
-        if (number >= 1000000) return (number / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-        if (number >= 1000) return (number / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-        return number;
-    }
 };
+
+function getChoices() {
+    let choices = [];
+
+    Object.values(Difficulty).reverse().forEach((choice) => {
+        let index = warService.getDifficultyIndex(choice);
+        choices.push({ name: choice, value: `${index}` });
+    })
+
+    return choices;
+}
+
+function getDifficultyName(difficulty) {
+    return warService.getDifficultyFromIndex(difficulty)
+}

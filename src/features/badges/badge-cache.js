@@ -1,4 +1,4 @@
-const { getLeaderboard } = require("../../core/database");
+const {getRaidLeaderboard} = require("../../core/database");
 
 class BadgeCacheService {
     constructor() {
@@ -55,7 +55,7 @@ class BadgeCacheService {
             // Process each raid leaderboard
             for (let raidId = -1; raidId <= 3; raidId++) {
                 try {
-                    const leaderboard = await getLeaderboard(raidId);
+                    const leaderboard = await getRaidLeaderboard(raidId);
                     const leaderboardArray = Array.from(leaderboard.keys());
                     shadowLeaderboardCache.set(raidId, leaderboardArray);
                     

@@ -3,6 +3,7 @@ const {getPlayerGuildInfo} = require("../features/player/wynn-api");
 const { config } = require("./config");
 const {removeToken} = require("../features/auth/authentication");
 const {requestUsername} = require("./utilities");
+const {warService} = require("../features/wars/report-war-endpoint");
 
 let pool;
 
@@ -51,7 +52,8 @@ async function createTables() {
                 tower_ehp DOUBLE NOT NULL,
                 tower_dps DOUBLE NOT NULL,
                 territory VARCHAR(100) NOT NULL,
-                owner_guild VARCHAR(36) NOT NULL
+                owner_guild VARCHAR(36) NOT NULL,
+                time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `;
 
@@ -365,6 +367,32 @@ async function getRaids(uuid, startTimestamp = null, endTimestamp = null) {
     return [];
 }
 
+async function getWars(uuid, startTimestamp = null, endTimestamp = null) {
+    try {
+        const connection = await pool.getConnection();
+
+        let query = `SELECT * FROM wars WHERE (player = ?)`;
+
+        const params = [uuid];
+
+        if (startTimestamp && endTimestamp) {
+            query += ` AND time BETWEEN ? AND ?`;
+            params.push(startTimestamp, endTimestamp);
+        } else if (startTimestamp) {
+            query += ` AND time > ?`;
+            params.push(startTimestamp);
+        }
+
+        const [rows] = await connection.execute(query, params);
+        connection.release();
+        return rows;
+    } catch (err) {
+        console.error("Error getting raids: ", err);
+    }
+
+    return [];
+}
+
 async function getRaidCount(raidId = null, startTimestamp = null, endTimestamp = null) {
     try {
         const connection = await pool.getConnection();
@@ -463,7 +491,7 @@ async function getOwedAspects() {
     return [];
 }
 
-async function getLeaderboard(raid, timestamp = null) {
+async function getRaidLeaderboard(raid, timestamp = null) {
     try {
         let playerMap = new Map();
 
@@ -484,6 +512,51 @@ async function getLeaderboard(raid, timestamp = null) {
             }
 
             playerMap.set(uuid, raidCount);
+        }
+
+        connection.release();
+
+        playerMap = new Map([...playerMap.entries()].sort((a, b) => b[1] - a[1]));
+
+        let leaderArray = [...playerMap.entries()];
+        leaderArray = leaderArray.filter(([key, value]) => value > 0);
+        playerMap = new Map(leaderArray);
+
+        return playerMap;
+    } catch (err) {
+        console.error("Error getting leaderboard: ", err);
+    }
+
+    return [];
+}
+
+async function getWarLeaderboard(difficultyIndex, timestamp = null) {
+    try {
+        let playerMap = new Map();
+
+        const connection = await pool.getConnection();
+        const query = `
+            SELECT uuid FROM players;
+        `;
+
+        const [rows] = await connection.execute(query);
+
+        for (const row of rows) {
+            let uuid = row.uuid;
+            let wars = await getWars(uuid, timestamp);
+
+            let warCount = 0;
+            for (const warRow of wars) {
+                let towerEhp = warRow['tower_ehp'];
+                let towerDps = warRow['tower_dps'];
+
+                let difficulty = warService.getWarDifficulty(towerEhp, towerDps);
+                let difficultyIndexRow = warService.getDifficultyIndex(difficulty);
+
+                if (difficultyIndex === -1 || difficultyIndexRow === difficultyIndex) warCount++;
+            }
+
+            playerMap.set(uuid, warCount);
         }
 
         connection.release();
@@ -922,5 +995,5 @@ async function getPlayerByDiscordId(discordId) {
 }
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
-    getPlayerUsername, insertPlayer, getRaids, getRaidCount, getAspects, getOwedAspects, getLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
+    getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId };

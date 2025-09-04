@@ -39,8 +39,8 @@ const raidReportHandler = async (client, packet) => {
 };
 
 const warReportHandler = async (client, packet) => {
-    const { warReport } = require('../wars/report-war-endpoint');
-    return await warReport.handleWarReport(client, packet);
+    const { warService } = require('../wars/report-war-endpoint');
+    return await warService.handleWarReport(client, packet);
 }
 
 const heartbeatHandler = async (client, packet) => {

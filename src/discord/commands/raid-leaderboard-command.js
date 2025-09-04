@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getPlayerUsername, getOwedAspects, getLeaderboard} = require("../../core/database");
+const { getPlayerUsername, getRaidLeaderboard} = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('leaderboard')
+        .setName('raid-leaderboard')
         .setDescription('Returns guild raid leaderboard rankings')
         .addStringOption(option =>
             option.setName('type')
@@ -51,7 +51,7 @@ module.exports = {
         let raid = interaction.options.getString('type');
         raid = parseInt(raid);
 
-        let leaderData = await getLeaderboard(raid, timestamp);
+        let leaderData = await getRaidLeaderboard(raid, timestamp);
         let fields = [];
 
         for (const [uuid, raidCount] of leaderData) {

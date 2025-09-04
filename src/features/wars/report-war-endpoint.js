@@ -5,11 +5,35 @@ class WarReportService {
     async handleWarReport(client, packet) {
         const { reporter, timeInWar, towerEhp, towerDps, territory, ownerGuild } = packet.data;
 
+        await insertWar(reporter, timeInWar, towerEhp, towerDps, territory, ownerGuild);
+    }
 
-        await insertWar(reporter, timeInWar, towerEhp, towerEhp, territory, ownerGuild);
+    getWarDifficulty(towerEhp, towerDps) {
+        if (towerDps < 250_000 || towerEhp < 1_000_000) return Difficulty.EASY;
+        else if (towerDps < 500_000 || towerEhp < 5_500_000) return Difficulty.MEDIUM;
+        else if (towerDps < 1_000_000 || towerEhp < 25_000_000) return Difficulty.HARD;
+        else return Difficulty.EXTREME;
+    }
+
+    getDifficultyIndex(difficulty) {
+        if (difficulty === Difficulty.ALL_WARS) return -1;
+        return Object.values(Difficulty).indexOf(difficulty);
+    }
+
+    getDifficultyFromIndex(index) {
+        if (index === -1) return Difficulty.ALL_WARS;
+        return Object.values(Difficulty)[index];
     }
 }
 
-const warReport = new WarReportService();
+const Difficulty = {
+    EASY: 'Easy',
+    MEDIUM: 'Medium',
+    HARD: 'Hard',
+    EXTREME: 'Extreme',
+    ALL_WARS: 'All Wars'
+}
 
-module.exports = { WarReportService, warReport };
+const warService = new WarReportService();
+
+module.exports = { WarReportService, warService, Difficulty };
