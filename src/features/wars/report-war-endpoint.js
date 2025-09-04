@@ -1,4 +1,4 @@
-import {insertWar} from "../../core/database";
+const {insertWar} = require('../../core/database');
 
 class WarReportService {
 
