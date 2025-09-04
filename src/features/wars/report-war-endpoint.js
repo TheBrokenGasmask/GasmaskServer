@@ -9,3 +9,7 @@ class WarReportService {
         await insertWar(reporter, timeInWar, towerEhp, towerEhp, territory, ownerGuild);
     }
 }
+
+const warReport = new WarReportService();
+
+module.exports = { WarReportService, warReport };
