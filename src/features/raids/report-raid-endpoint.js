@@ -107,11 +107,13 @@ class RaidReportService {
     }
 
     async handleRaidReport(client, packet) {
-        const { raid, player1, player2, player3, player4, reporter, seasonRating, guildXP} = packet.data;
-        if (!raid || !player1 || !player2 || !player3 || !player4 || !seasonRating || !guildXP) {
+        let { raid, player1, player2, player3, player4, reporter, seasonRating, guildXP} = packet.data;
+        if (!raid || !player1 || !player2 || !player3 || !player4  || !guildXP) {
             console.warn(`Invalid raid report packet: missing required fields from client ${client.uuid}`);
             return null;
         }
+
+        if (!seasonRating) seasonRating = 0;
 
         const reportKey = this.generateReportKey(player1, player2, player3, player4, raid);
         
