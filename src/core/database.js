@@ -3,7 +3,7 @@ const {getPlayerGuildInfo} = require("../features/player/wynn-api");
 const { config } = require("./config");
 const {removeToken} = require("../features/auth/authentication");
 const {requestUsername} = require("./utilities");
-const {warService} = require("../features/wars/report-war-endpoint");
+
 
 let pool;
 
@@ -531,6 +531,7 @@ async function getRaidLeaderboard(raid, timestamp = null) {
 }
 
 async function getWarLeaderboard(difficultyIndex, timestamp = null) {
+    const {warService} = require("../features/wars/report-war-endpoint");
     try {
         let playerMap = new Map();
 
