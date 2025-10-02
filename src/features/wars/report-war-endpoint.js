@@ -9,9 +9,9 @@ class WarReportService {
     }
 
     getWarDifficulty(towerEhp, towerDps) {
-        if (towerDps < 250_000 || towerEhp < 1_000_000) return Difficulty.EASY;
-        else if (towerDps < 500_000 || towerEhp < 5_500_000) return Difficulty.MEDIUM;
-        else if (towerDps < 1_000_000 || towerEhp < 25_000_000) return Difficulty.HARD;
+        if (towerDps < 5_000 || towerEhp < 10_000_000) return Difficulty.EASY;
+        else if (towerDps < 35_000 || towerEhp < 40_500_000) return Difficulty.MEDIUM;
+        else if (towerDps < 150_000 || towerEhp < 150_000_000) return Difficulty.HARD;
         else return Difficulty.EXTREME;
     }
 
