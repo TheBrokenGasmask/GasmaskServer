@@ -28,6 +28,8 @@ module.exports = {
                 .setDescription('Number of days (only used when period is "Custom Days")')
         ),
     async execute(interaction) {
+        await interaction.deferReply();
+
         const period = interaction.options.getString('period') || 'all';
         let days = interaction.options.getString('days');
         let timestamp;
@@ -76,7 +78,7 @@ module.exports = {
         };
 
         let currentPage = 0;
-        const embedMessage = await interaction.reply({ embeds: [generateEmbed(currentPage)], fetchReply: true });
+        const embedMessage = await interaction.editReply({ embeds: [generateEmbed(currentPage)], fetchReply: true });
 
         if (totalPages > 1) {
             const generateActionRow = (page) => {
