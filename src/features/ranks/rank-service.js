@@ -201,6 +201,10 @@ class RankService {
             }
         }
 
+        if (roleIds.length > 0) {
+            console.log(highestIngameRank + "!");
+        }
+
         if (highestRank != null && roleIds.length > 1) highestRank.star = true
         return highestRank;
     }
