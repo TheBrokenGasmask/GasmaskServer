@@ -193,11 +193,15 @@ class RankService {
         let highestRank = null;
         let highestIngameRank = 0;
 
-        let rankCount = 0;
+        let captainRankCount = 0;
+        let strategistRankCount = 0;
 
         for (const roleId of roleIds) {
             const rankConfig = this.getRankByRoleId(roleId);
-            if (rankConfig) rankCount++;
+            if (rankConfig) {
+                if (rankConfig.key === 'captain' || rankConfig.key === "commander") captainRankCount++;
+                if (rankConfig.key === 'strategist' || rankConfig.key === "officer") captainRankCount++;
+            }
 
             if (rankConfig && rankConfig['ingame-rank'] > highestIngameRank) {
                 highestRank = rankConfig;
@@ -205,7 +209,7 @@ class RankService {
             }
         }
 
-        if (highestRank != null && rankCount > 1) highestRank.star = true
+        if (captainRankCount > 1 || strategistRankCount > 1) highestRank.star = true
         return highestRank;
     }
 
