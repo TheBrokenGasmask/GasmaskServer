@@ -46,6 +46,7 @@ class PlayersEndpoint {
                         username: player.username,
                         guild: player.guild,
                         rank: rankInfo,
+                        multiple_ranks: (discordId ? player.guild_rank.star : false),
                         needs_aspects: player.needs_aspects,
                         badges: playerBadges,
                         has_discord_link: !!discordId

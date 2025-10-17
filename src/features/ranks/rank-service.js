@@ -201,6 +201,7 @@ class RankService {
             }
         }
 
+        if (roleIds.length > 1) highestRank.star = true
         return highestRank;
     }
 
