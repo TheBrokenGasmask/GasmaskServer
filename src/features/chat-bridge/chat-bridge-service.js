@@ -200,6 +200,7 @@ class ChatBridgeService {
         }
 
         let rank = userRank.identifier;
+        let multipleRanks = userRank.star;
 
         console.log(`Processing Discord message from ${author.username} (linked as ${minecraftUsername}${userRank ? ` - ${userRank.identifier}` : ''}): ${message}`);
 
@@ -211,7 +212,8 @@ class ChatBridgeService {
                 timestamp: Date.now(),
                 uuid: minecraftUuid,
                 avatarUrl: `https://crafatar.com/avatars/${minecraftUuid}?size=64&default=MHF_Steve&overlay`,
-                rank: rank
+                rank: rank,
+                multiple_ranks: multipleRanks
             }
         };
 

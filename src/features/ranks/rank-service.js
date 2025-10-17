@@ -209,7 +209,7 @@ class RankService {
             }
         }
 
-        if (captainRankCount > 1 || strategistRankCount > 1) highestRank.star = true
+        highestRank.star = (captainRankCount > 1 || strategistRankCount > 1)
         return highestRank;
     }
 
