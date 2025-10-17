@@ -41,6 +41,8 @@ class PlayersEndpoint {
                         needs_aspects: player.needs_aspects
                     });
 
+                    console.log(player.username, player.guild_rank);
+
                     const playerData = {
                         uuid: player.uuid,
                         username: player.username,
