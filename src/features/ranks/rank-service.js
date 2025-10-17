@@ -193,19 +193,19 @@ class RankService {
         let highestRank = null;
         let highestIngameRank = 0;
 
+        let rankCount = 0;
+
         for (const roleId of roleIds) {
             const rankConfig = this.getRankByRoleId(roleId);
+            if (rankConfig) rankCount++;
+
             if (rankConfig && rankConfig['ingame-rank'] > highestIngameRank) {
                 highestRank = rankConfig;
                 highestIngameRank = rankConfig['ingame-rank'];
             }
         }
 
-        if (roleIds.length > 0) {
-            console.log(highestIngameRank + "!");
-        }
-
-        if (highestRank != null && roleIds.length > 1) highestRank.star = true
+        if (highestRank != null && rankCount > 1) highestRank.star = true
         return highestRank;
     }
 
