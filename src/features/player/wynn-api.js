@@ -1,42 +1,96 @@
 const request = require('request');
 const { config } = require("../../core/config");
 
-function getWynnGuild(){
+function getWynnGuild() {
     return new Promise((resolve, reject) => {
-        const options = {
-            url: `https://api.wynncraft.com/v3/guild/prefix/${config.get("guild-tag")}?identifier=uuid`,
-            headers: {
-                Authorization: `Bearer ${config.get("wynncraft-token")}`
-            }
+        const makeRequest = (retries = 3) => {
+            const options = {
+                method: 'GET',
+                url: `https://api.wynncraft.com/v3/guild/prefix/${config.get("guild-tag")}?identifier=uuid`,
+                headers: {
+                    Authorization: `Bearer ${config.get("wynncraft-token")}`
+                },
+                timeout: 10000,
+                json: true,
+                forever: false,
+                pool: {maxSockets: 100}
+            };
+
+            request(options, function (error, response, body) {
+                if (error) {
+                    console.error('WynnAPI network error:', error.message);
+
+                    // Retry on network errors
+                    if (retries > 0 && (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT')) {
+                        console.log(`Retrying guild request after error (${retries} retries left)`);
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+
+                    return reject(new Error(`WynnAPI network error: ${error.message}`));
+                }
+
+                if (response.statusCode !== 200) {
+                    console.error(`WynnAPI request failed: Status ${response.statusCode}, Body:`, body);
+
+                    if (retries > 0 && response.statusCode >= 500) {
+                        console.log(`Retrying guild request after ${response.statusCode} (${retries} retries left)`);
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+
+                    return reject(new Error(`WynnAPI request failed: Status ${response.statusCode}`));
+                }
+
+                resolve(body);
+            });
         };
 
-        request(options, function (error, response, body) {
-            if (!error && response.statusCode === 200) {
-                resolve(JSON.parse(body));
-            } else {
-                const msg = error ? error.message : `Status ${response.statusCode}, Body: ${body}`;
-                reject(new Error('WynnAPI request failed: ' + msg));
-            }
-        });
+        makeRequest();
     });
 }
+
 function getWynnUser(uuid) {
     return new Promise((resolve, reject) => {
-        const options = {
-            url: `https://api.wynncraft.com/v3/player/${uuid}`,
-            headers: {
-                Authorization: `Bearer ${config.get("wynncraft-token")}`
-            }
+        const makeRequest = (retries = 3) => {
+            const options = {
+                method: 'GET',
+                url: `https://api.wynncraft.com/v3/player/${uuid}`,
+                headers: {
+                    Authorization: `Bearer ${config.get("wynncraft-token")}`
+                },
+                timeout: 10000,
+                json: true,
+                forever: false,
+                pool: {maxSockets: 100}
+            };
+
+            request(options, function (error, response, body) {
+                if (error) {
+                    console.error('WynnAPI network error:', error.message);
+
+                    if (retries > 0 && (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT')) {
+                        console.log(`Retrying user request after error (${retries} retries left)`);
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+
+                    return reject(new Error(`WynnAPI network error: ${error.message}`));
+                }
+
+                if (response.statusCode !== 200) {
+                    console.error(`WynnAPI request failed: Status ${response.statusCode}, Body:`, body);
+
+                    if (retries > 0 && response.statusCode >= 500) {
+                        console.log(`Retrying user request after ${response.statusCode} (${retries} retries left)`);
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+
+                    return reject(new Error(`WynnAPI request failed: Status ${response.statusCode}`));
+                }
+
+                resolve(body);
+            });
         };
 
-        request(options, function (error, response, body) {
-            if (!error && response.statusCode === 200) {
-                resolve(JSON.parse(body));
-            } else {
-                const msg = error ? error.message : `Status ${response.statusCode}, Body: ${body}`;
-                reject(new Error('WynnAPI request failed: ' + msg));
-            }
-        });
+        makeRequest();
     });
 }
 
@@ -48,12 +102,14 @@ function getGuildRank(uuid) {
                 return;
             }
             resolve(wynnUser.guild.rankStars.length);
-        }).catch(reject);
+        }).catch(error => {
+            console.error('Error getting guild rank:', error);
+            reject(error);
+        });
     });
 }
 
 async function getPlayerGuild(uuid) {
-
     try {
         let player = await getWynnUser(uuid);
         if (!player.guild || player.guild === "NULL") return null;
@@ -68,15 +124,14 @@ async function getPlayerGuildInfo(uuid) {
     try {
         let player = await getWynnUser(uuid);
         if (!player.guild || player.guild === "NULL") return { guild: null, guildRank: null };
-        
+
         const guildPrefix = player.guild.prefix;
         let guildRank = null;
-        
-        // Only get guild rank if player is in the configured guild
+
         if (guildPrefix === config.get("guild-tag")) {
             guildRank = player.guild.rankStars ? player.guild.rankStars.length : 0;
         }
-        
+
         return { guild: guildPrefix, guildRank };
     } catch (error) {
         console.error('Error fetching player guild info:', error);
