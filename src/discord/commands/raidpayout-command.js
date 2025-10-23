@@ -16,8 +16,8 @@ module.exports = {
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('captian')
-                .setDescription('Captain LE bonus per raid')
+            option.setName('commander')
+                .setDescription('Commander LE bonus per raid')
                 .setRequired(true)
         )
         .addStringOption(option =>
@@ -32,7 +32,7 @@ module.exports = {
         ),
     async execute(interaction) {
         const basePay = parseFloat(interaction.options.getString('base'));
-        const captainPay = parseFloat(interaction.options.getString('captian'));
+        const commanderPay = parseFloat(interaction.options.getString('commander'));
         const officerPay = parseFloat(interaction.options.getString('officer'));
         const advisorPay = parseFloat(interaction.options.getString('advisor'));
         try{
@@ -176,8 +176,8 @@ module.exports = {
                 let rankBonus = 0;
                 const rankLower = member.rankString.toLowerCase();
                 
-                if (rankLower === 'captain') {
-                    rankBonus = member.raidCount * captainPay;
+                if (rankLower === 'commander') {
+                    rankBonus = member.raidCount * commanderPay;
                 } else if (rankLower === 'officer' || rankLower === 'strategist') {
                     rankBonus = member.raidCount * officerPay;
                 } else if (['advisor', 'chief', 'council', 'owner'].includes(rankLower)) {
