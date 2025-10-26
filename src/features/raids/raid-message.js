@@ -2,6 +2,7 @@ const { EmbedBuilder } = require('discord.js');
 const { config } = require("../../core/config");
 const { getRaidCount } = require("../../core/database");
 const { client } = require("../../discord/discord-bot")
+const {formatTime} = require("../../core/utilities");
 
 const raids = ["Nest of the Grootslangs",
     "Orphion's Nexus of Light",
@@ -42,7 +43,7 @@ function getWeeklyTimestamp() {
     return targetDate;
 }
 
-async function sendRaidEmbed(raidID, player1, player2, player3, player4) {
+async function sendRaidEmbed(raidID, player1, player2, player3, player4, time) {
     this.config = config.get('chat-bridge');
     const channelId = this.config['channel-id'];
     try {
@@ -53,9 +54,11 @@ async function sendRaidEmbed(raidID, player1, player2, player3, player4) {
         const totalRaidCount = await getRaidCount();
         const weeklyRaidCount = await getRaidCount(null, mysqlTimestamp);
 
+        const durationString = `Duration: ${formatTime(time)}\n`;
+
         const embed = new EmbedBuilder()
             .setTitle(`${player1}, ${player2}, ${player3}, & ${player4} Completed ${raids[raidID]}`)
-            .setDescription(`All time ${raidsAbbr[raidID]}'s: ${specificRaidCount}\nAll time guild raids: ${totalRaidCount}\nGuild raids this week: ${weeklyRaidCount}`)
+            .setDescription((time === null ? '' : durationString) + `All time ${raidsAbbr[raidID]}'s: ${specificRaidCount}\nAll time guild raids: ${totalRaidCount}\nGuild raids this week: ${weeklyRaidCount}`)
             .setColor(0x0099FF)
 
         const messageOptions = { embeds: [embed] };

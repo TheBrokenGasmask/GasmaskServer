@@ -151,16 +151,16 @@ async function createTables() {
     }
 }
 
-async function insertRaid(raid, player1, player2, player3, player4, reporter, seasonRating, guildXP) {
+async function insertRaid(raid, player1, player2, player3, player4, reporter, seasonRating, guildXP, time) {
     try {
         const connection = await pool.getConnection();
 
         const insertQuery = `
-            INSERT INTO raids (raid, player_1, player_2, player_3, player_4, reporter, season_rating, guild_xp)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+            INSERT INTO raids (raid, player_1, player_2, player_3, player_4, reporter, season_rating, guild_xp, duration)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
         `;
 
-        await connection.execute(insertQuery, [raid, player1, player2, player3, player4, reporter, seasonRating, guildXP]);
+        await connection.execute(insertQuery, [raid, player1, player2, player3, player4, reporter, seasonRating, guildXP, time]);
         connection.release();
     } catch (err) {
         console.error("Error inserting raid: ", err);

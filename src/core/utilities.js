@@ -131,6 +131,12 @@ function daysToTimestamp(days) {
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
+function formatTime(seconds) {
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 function getLastPoolReset(weeksAgo = 0) {
   const date = new Date();
   date.setUTCHours(17, 0, 0, 0);
@@ -248,4 +254,4 @@ function requestItemAnalysis(item) {
     });
   });
 }
-module.exports = {sleep, requestUUID, requestUsername, raids, raidsAbbr, daysToTimestamp, getLastPoolReset, requestItemAnalysis};
+module.exports = {sleep, requestUUID, requestUsername, raids, raidsAbbr, daysToTimestamp, formatTime, getLastPoolReset, requestItemAnalysis};
