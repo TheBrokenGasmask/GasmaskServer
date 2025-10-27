@@ -74,7 +74,7 @@ class RaidReportService {
                     if (data.timeReport) {
                         const reportParts = data.timeReport.split(':');
                         time = reportParts.length > 5 ? reportParts[5] : null;
-                    } else if (data.duration) {
+                    } else if (data.duration && data.duration > 0) {
                         time = data.duration;
                     }
 
@@ -160,7 +160,9 @@ class RaidReportService {
             if (!data.reporter && client.packet?.data?.reporter) {
                 data.reporter = client.packet.data.reporter;
             }
-            if (client.packet?.data?.duration) {
+            // Always check for duration, even from already-seen clients
+            // Only store valid durations (> 0, not -1 sentinel values)
+            if (client.packet?.data?.duration && client.packet.data.duration > 0) {
                 data.duration = client.packet.data.duration;
                 console.log(`Stored duration for ${hash}: ${data.duration}`);
             }
