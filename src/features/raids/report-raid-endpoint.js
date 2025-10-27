@@ -149,28 +149,6 @@ class RaidReportService {
             this.scheduleProcessing(hash, reportKey, TIME_WAIT + 100);
         }
 
-        if (data.thresholdMet) {
-            const waitTime = now - data.thresholdMet;
-
-            if (waitTime > TIME_WAIT) {
-                data.status = 'processed';
-
-                if (this.processingTimeouts.has(hash)) {
-                    clearTimeout(this.processingTimeouts.get(hash));
-                    this.processingTimeouts.delete(hash);
-                }
-
-                return {
-                    shouldProcess: true,
-                    isDuplicate: false,
-                    reportKey: data.timeReport || reportKey,
-                    seasonRating: data.seasonRating,
-                    guildXP: data.guildXP,
-                    reporter: data.reporter
-                };
-            }
-        }
-
         if (!data.seasonRating && client.packet?.data?.seasonRating) {
             data.seasonRating = client.packet.data.seasonRating;
         }
