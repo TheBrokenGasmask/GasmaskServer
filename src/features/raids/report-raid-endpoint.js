@@ -14,6 +14,7 @@ class RaidReportService {
         this.cacheExpiry = 45000;
         this.cleanupInterval = 90000;
         this.minClientThreshold = 1;
+        this.processingTimeouts = new Map();
 
         this.startCleanup();
         console.log('[RaidReport] Service initialized');
@@ -55,6 +56,60 @@ class RaidReportService {
         }
     }
 
+    scheduleProcessing(hash, reportKey, delay) {
+        // Clear any existing timeout for this hash
+        if (this.processingTimeouts.has(hash)) {
+            clearTimeout(this.processingTimeouts.get(hash));
+        }
+
+        console.log(`[RaidReport] ⏰ Scheduling processing for ${hash} in ${delay}ms`);
+
+        const timeout = setTimeout(async () => {
+            console.log(`[RaidReport] ⏰ Timer fired for ${hash}, checking if ready to process`);
+            this.processingTimeouts.delete(hash);
+
+            // Process the raid if it still exists and is ready
+            const data = this.raidData.get(hash);
+            if (data && data.status === 'pending' && data.thresholdMet) {
+                const now = Date.now();
+                const waitTime = now - data.thresholdMet;
+
+                if (waitTime >= 2000) {
+                    console.log(`[RaidReport] 🚀 Auto-processing raid ${hash} after timer`);
+                    data.status = 'processed';
+
+                    // Extract raid info from hash
+                    const parts = hash.split(':');
+                    const [player1, player2, player3, player4, raid] = parts;
+                    const finalReportKey = data.timeReport || reportKey;
+                    const reportParts = finalReportKey.split(':');
+                    const time = reportParts[5] || null;
+
+                    try {
+                        // Get the original data
+                        const originalData = this.raidData.get(hash);
+                        await this.processRaidReport(
+                            raid,
+                            player1,
+                            player2,
+                            player3,
+                            player4,
+                            originalData.seasonRating || 0,
+                            originalData.guildXP,
+                            originalData.reporter,
+                            time
+                        );
+                        console.log(`[RaidReport] ✅ Auto-processing completed for ${hash}`);
+                    } catch (error) {
+                        console.error(`[RaidReport] ❌ Error auto-processing raid:`, error);
+                    }
+                }
+            }
+        }, delay);
+
+        this.processingTimeouts.set(hash, timeout);
+    }
+
     async _processRaidInternal(hash, reportKey, client) {
         const now = Date.now();
         const TIME_WAIT = 2000;
@@ -69,7 +124,10 @@ class RaidReportService {
                 clients: new Set(),
                 firstSeen: now,
                 timeReport: null,
-                thresholdMet: null
+                thresholdMet: null,
+                seasonRating: null,
+                guildXP: null,
+                reporter: null
             });
         }
 
@@ -86,6 +144,11 @@ class RaidReportService {
 
         if (now - data.firstSeen > this.cacheExpiry) {
             console.log(`[RaidReport] Cache expired for ${hash}, resetting`);
+            // Clear any pending timeout
+            if (this.processingTimeouts.has(hash)) {
+                clearTimeout(this.processingTimeouts.get(hash));
+                this.processingTimeouts.delete(hash);
+            }
             data.status = 'pending';
             data.count = 0;
             data.clients.clear();
@@ -119,6 +182,9 @@ class RaidReportService {
         if (data.count >= threshold && !data.thresholdMet) {
             data.thresholdMet = now;
             console.log(`[RaidReport] Threshold met for ${hash} at ${now}`);
+
+            // Schedule automatic processing after TIME_WAIT
+            this.scheduleProcessing(hash, reportKey, TIME_WAIT + 100);
         }
 
         if (data.thresholdMet) {
@@ -128,16 +194,37 @@ class RaidReportService {
             if (waitTime > TIME_WAIT) {
                 console.log(`[RaidReport] ✅ Processing raid ${hash} - time wait satisfied`);
                 data.status = 'processed';
+
+                // Clear the scheduled timeout since we're processing now
+                if (this.processingTimeouts.has(hash)) {
+                    clearTimeout(this.processingTimeouts.get(hash));
+                    this.processingTimeouts.delete(hash);
+                }
+
                 return {
                     shouldProcess: true,
                     isDuplicate: false,
-                    reportKey: data.timeReport || reportKey
+                    reportKey: data.timeReport || reportKey,
+                    seasonRating: data.seasonRating,
+                    guildXP: data.guildXP,
+                    reporter: data.reporter
                 };
             } else {
                 console.log(`[RaidReport] ⏳ Waiting ${TIME_WAIT - waitTime}ms more for ${hash}`);
             }
         } else {
             console.log(`[RaidReport] ⏳ Threshold not yet met for ${hash}`);
+        }
+
+        // Store data for potential auto-processing
+        if (!data.seasonRating && client.packet?.data?.seasonRating) {
+            data.seasonRating = client.packet.data.seasonRating;
+        }
+        if (!data.guildXP && client.packet?.data?.guildXP) {
+            data.guildXP = client.packet.data.guildXP;
+        }
+        if (!data.reporter && client.packet?.data?.reporter) {
+            data.reporter = client.packet.data.reporter;
         }
 
         // Still waiting for time fields or threshold not met
@@ -173,6 +260,9 @@ class RaidReportService {
 
         console.log(`[RaidReport] Generated keys - base: ${baseKey}, report: ${reportKey}`);
 
+        // Store packet data on client for potential use in auto-processing
+        client.packet = packet;
+
         const result = await this.processRaidSafely(baseKey, client);
         console.log(`[RaidReport] Processing result:`, result);
 
@@ -192,7 +282,17 @@ class RaidReportService {
         console.log(`[RaidReport] 🚀 PROCESSING RAID - finalReportKey: ${finalReportKey}`);
 
         try {
-            await this.processRaidReport(finalRaid, p1, p2, p3, p4, seasonRating, guildXP, reporter, finalTime);
+            await this.processRaidReport(
+                finalRaid,
+                p1,
+                p2,
+                p3,
+                p4,
+                result.seasonRating || seasonRating,
+                result.guildXP || guildXP,
+                result.reporter || reporter,
+                finalTime
+            );
             console.log(`[RaidReport] ✅ Raid processed successfully`);
         } catch (error) {
             console.error(`[RaidReport] ❌ Error processing raid:`, error);
@@ -277,6 +377,11 @@ class RaidReportService {
             for (const [hash, data] of this.raidData.entries()) {
                 if (now - data.firstSeen > this.cacheExpiry) {
                     expiredHashes.push(hash);
+                    // Clear any pending timeouts for expired entries
+                    if (this.processingTimeouts.has(hash)) {
+                        clearTimeout(this.processingTimeouts.get(hash));
+                        this.processingTimeouts.delete(hash);
+                    }
                 }
             }
 
@@ -295,6 +400,7 @@ class RaidReportService {
             recentRaidsCount: this.recentRaids.size,
             raidDataCount: this.raidData.size,
             activeLocks: this.raidLocks.size,
+            pendingTimeouts: this.processingTimeouts.size,
             cacheExpiry: this.cacheExpiry,
             cleanupInterval: this.cleanupInterval
         };
