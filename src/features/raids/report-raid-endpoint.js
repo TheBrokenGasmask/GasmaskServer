@@ -236,7 +236,7 @@ class RaidReportService {
         console.log(`[RaidReport] Client: ${client.uuid}`);
         console.log(`[RaidReport] Packet data:`, packet.data);
 
-        let { raid, player1, player2, player3, player4, reporter, seasonRating, guildXP, durationSeconds } = packet.data;
+        let { raid, player1, player2, player3, player4, reporter, seasonRating, guildXP, duration } = packet.data;
 
         if (!raid || !player1 || !player2 || !player3 || !player4 || !guildXP) {
             console.error(`[RaidReport] ❌ Invalid packet - missing fields:`, {
@@ -256,7 +256,7 @@ class RaidReportService {
         }
 
         const baseKey = this.generateBaseKey(player1, player2, player3, player4, raid);
-        const reportKey = this.generateReportKey(player1, player2, player3, player4, raid, durationSeconds);
+        const reportKey = this.generateReportKey(player1, player2, player3, player4, raid, duration);
 
         console.log(`[RaidReport] Generated keys - base: ${baseKey}, report: ${reportKey}`);
 
