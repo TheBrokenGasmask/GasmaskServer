@@ -78,25 +78,30 @@ class RaidReportService {
                     console.log(`[RaidReport] 🚀 Auto-processing raid ${hash} after timer`);
                     data.status = 'processed';
 
-                    // Extract raid info from hash
+                    // Extract raid info - hash format is player1:player2:player3:player4:raid
                     const parts = hash.split(':');
                     const [player1, player2, player3, player4, raid] = parts;
+
+                    // Use stored timeReport if available, otherwise fall back to reportKey
                     const finalReportKey = data.timeReport || reportKey;
+                    console.log(`[RaidReport] Using report key for time extraction: ${finalReportKey}`);
+
+                    // Report key format is player1:player2:player3:player4:raid OR player1:player2:player3:player4:raid:time
                     const reportParts = finalReportKey.split(':');
-                    const time = reportParts[5] || null;
+                    const time = reportParts.length > 5 ? reportParts[5] : null;
+
+                    console.log(`[RaidReport] Extracted time: ${time} from reportKey with ${reportParts.length} parts`);
 
                     try {
-                        // Get the original data
-                        const originalData = this.raidData.get(hash);
                         await this.processRaidReport(
                             raid,
                             player1,
                             player2,
                             player3,
                             player4,
-                            originalData.seasonRating || 0,
-                            originalData.guildXP,
-                            originalData.reporter,
+                            data.seasonRating || 0,
+                            data.guildXP,
+                            data.reporter,
                             time
                         );
                         console.log(`[RaidReport] ✅ Auto-processing completed for ${hash}`);
@@ -263,7 +268,7 @@ class RaidReportService {
         // Store packet data on client for potential use in auto-processing
         client.packet = packet;
 
-        const result = await this.processRaidSafely(baseKey, client);
+        const result = await this.processRaidSafely(reportKey, client);
         console.log(`[RaidReport] Processing result:`, result);
 
         if (!result.shouldProcess) {
