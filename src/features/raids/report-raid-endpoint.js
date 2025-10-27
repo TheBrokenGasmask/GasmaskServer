@@ -69,16 +69,10 @@ class RaidReportService {
                     const parts = hash.split(':');
                     const [player1, player2, player3, player4, raid] = parts;
 
-                    // Determine final time: use timeReport if available, otherwise use stored duration
                     let time = null;
-                    if (data.timeReport) {
-                        const reportParts = data.timeReport.split(':');
-                        time = reportParts.length > 5 ? reportParts[5] : null;
-                    } else if (data.duration && data.duration > 0) {
-                        time = data.duration;
-                    }
+                    if (data.duration && data.duration > 0) time = data.duration;
 
-                    console.log(`Auto-processing ${hash}: using timeReport=${data.timeReport}, duration=${data.duration}, final time=${time}`);
+                    console.log(`Auto-processing ${hash}: duration=${data.duration}, final time=${time}`);
 
                     try {
                         await this.processRaidReport(
@@ -112,7 +106,6 @@ class RaidReportService {
                 count: 0,
                 clients: new Set(),
                 firstSeen: now,
-                timeReport: null,
                 thresholdMet: null,
                 seasonRating: null,
                 guildXP: null,
@@ -132,18 +125,11 @@ class RaidReportService {
             data.count = 0;
             data.clients.clear();
             data.firstSeen = now;
-            data.timeReport = null;
             data.thresholdMet = null;
         }
 
         if (data.status === 'processed') {
             return { shouldProcess: false, isDuplicate: true };
-        }
-
-        const hasTime = reportKey.split(':').length > 5;
-        if (hasTime) {
-            data.timeReport = reportKey;
-            console.log(`Stored timeReport for ${hash}: ${reportKey}`);
         }
 
         if (!data.clients.has(client)) {
@@ -160,6 +146,7 @@ class RaidReportService {
             if (!data.reporter && client.packet?.data?.reporter) {
                 data.reporter = client.packet.data.reporter;
             }
+
             // Always check for duration, even from already-seen clients
             // Only store valid durations (> 0, not -1 sentinel values)
             if (client.packet?.data?.duration && client.packet.data.duration > 0) {
