@@ -73,6 +73,8 @@ class RaidReportService {
                     const reportParts = finalReportKey.split(':');
                     const time = reportParts.length > 5 ? reportParts[5] : null;
 
+                    console.log(`Auto-processing ${hash}: using timeReport=${data.timeReport}, final time=${time}`);
+
                     try {
                         await this.processRaidReport(
                             raid,
@@ -135,11 +137,23 @@ class RaidReportService {
         const hasTime = reportKey.split(':').length > 5;
         if (hasTime) {
             data.timeReport = reportKey;
+            console.log(`Stored timeReport for ${hash}: ${reportKey}`);
         }
 
         if (!data.clients.has(client)) {
             data.clients.add(client);
             data.count++;
+
+            // Store data from the first report
+            if (!data.seasonRating && client.packet?.data?.seasonRating) {
+                data.seasonRating = client.packet.data.seasonRating;
+            }
+            if (!data.guildXP && client.packet?.data?.guildXP) {
+                data.guildXP = client.packet.data.guildXP;
+            }
+            if (!data.reporter && client.packet?.data?.reporter) {
+                data.reporter = client.packet.data.reporter;
+            }
         }
 
         const threshold = config.get("minimum-client-threshold");
@@ -147,16 +161,6 @@ class RaidReportService {
         if (data.count >= threshold && !data.thresholdMet) {
             data.thresholdMet = now;
             this.scheduleProcessing(hash, reportKey, TIME_WAIT + 100);
-        }
-
-        if (!data.seasonRating && client.packet?.data?.seasonRating) {
-            data.seasonRating = client.packet.data.seasonRating;
-        }
-        if (!data.guildXP && client.packet?.data?.guildXP) {
-            data.guildXP = client.packet.data.guildXP;
-        }
-        if (!data.reporter && client.packet?.data?.reporter) {
-            data.reporter = client.packet.data.reporter;
         }
 
         return { shouldProcess: false, isDuplicate: false };
