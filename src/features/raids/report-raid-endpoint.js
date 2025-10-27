@@ -16,6 +16,7 @@ class RaidReportService {
         this.minClientThreshold = 1;
 
         this.startCleanup();
+        console.log('[RaidReport] Service initialized');
     }
 
     generateReportKey(player1, player2, player3, player4, raid, time = null) {
@@ -32,20 +33,25 @@ class RaidReportService {
 
     async processRaidSafely(reportKey, client) {
         const hash = this.generateRaidHash(reportKey);
+        console.log(`[RaidReport] Processing raid safely - hash: ${hash}, client: ${client.uuid}`);
 
         if (this.raidLocks.has(hash)) {
+            console.log(`[RaidReport] Lock exists for ${hash}, waiting...`);
             await this.raidLocks.get(hash);
+            console.log(`[RaidReport] Lock released for ${hash}`);
         }
 
         let resolveLock;
         const lockPromise = new Promise(resolve => { resolveLock = resolve; });
         this.raidLocks.set(hash, lockPromise);
+        console.log(`[RaidReport] Lock acquired for ${hash}`);
 
         try {
             return await this._processRaidInternal(hash, reportKey, client);
         } finally {
             this.raidLocks.delete(hash);
             resolveLock();
+            console.log(`[RaidReport] Lock cleaned up for ${hash}`);
         }
     }
 
@@ -53,7 +59,10 @@ class RaidReportService {
         const now = Date.now();
         const TIME_WAIT = 2000;
 
+        console.log(`[RaidReport] Internal processing - hash: ${hash}, reportKey: ${reportKey}`);
+
         if (!this.raidData.has(hash)) {
+            console.log(`[RaidReport] Creating new raid data entry for ${hash}`);
             this.raidData.set(hash, {
                 status: 'pending',
                 count: 0,
@@ -65,8 +74,18 @@ class RaidReportService {
         }
 
         const data = this.raidData.get(hash);
+        console.log(`[RaidReport] Current data state:`, {
+            hash,
+            status: data.status,
+            count: data.count,
+            clientsCount: data.clients.size,
+            age: now - data.firstSeen,
+            hasTime: data.timeReport !== null,
+            thresholdMet: data.thresholdMet !== null
+        });
 
         if (now - data.firstSeen > this.cacheExpiry) {
+            console.log(`[RaidReport] Cache expired for ${hash}, resetting`);
             data.status = 'pending';
             data.count = 0;
             data.clients.clear();
@@ -76,31 +95,49 @@ class RaidReportService {
         }
 
         if (data.status === 'processed') {
+            console.log(`[RaidReport] Raid already processed: ${hash}`);
             return { shouldProcess: false, isDuplicate: true };
         }
 
         const hasTime = reportKey.split(':').length > 5;
         if (hasTime) {
+            console.log(`[RaidReport] Report has time field, storing: ${reportKey}`);
             data.timeReport = reportKey;
         }
 
         if (!data.clients.has(client)) {
             data.clients.add(client);
             data.count++;
+            console.log(`[RaidReport] New client added. Count: ${data.count}, Client: ${client.uuid}`);
+        } else {
+            console.log(`[RaidReport] Duplicate client report ignored: ${client.uuid}`);
         }
 
         const threshold = config.get("minimum-client-threshold");
+        console.log(`[RaidReport] Threshold check - current: ${data.count}, required: ${threshold}`);
+
         if (data.count >= threshold && !data.thresholdMet) {
             data.thresholdMet = now;
+            console.log(`[RaidReport] Threshold met for ${hash} at ${now}`);
         }
 
-        if (data.thresholdMet && (now - data.thresholdMet > TIME_WAIT)) {
-            data.status = 'processed';
-            return {
-                shouldProcess: true,
-                isDuplicate: false,
-                reportKey: data.timeReport || reportKey
-            };
+        if (data.thresholdMet) {
+            const waitTime = now - data.thresholdMet;
+            console.log(`[RaidReport] Threshold met ${waitTime}ms ago, TIME_WAIT: ${TIME_WAIT}ms`);
+
+            if (waitTime > TIME_WAIT) {
+                console.log(`[RaidReport] ✅ Processing raid ${hash} - time wait satisfied`);
+                data.status = 'processed';
+                return {
+                    shouldProcess: true,
+                    isDuplicate: false,
+                    reportKey: data.timeReport || reportKey
+                };
+            } else {
+                console.log(`[RaidReport] ⏳ Waiting ${TIME_WAIT - waitTime}ms more for ${hash}`);
+            }
+        } else {
+            console.log(`[RaidReport] ⏳ Threshold not yet met for ${hash}`);
         }
 
         // Still waiting for time fields or threshold not met
@@ -108,22 +145,42 @@ class RaidReportService {
     }
 
     async handleRaidReport(client, packet) {
+        console.log(`[RaidReport] ====== NEW RAID REPORT RECEIVED ======`);
+        console.log(`[RaidReport] Client: ${client.uuid}`);
+        console.log(`[RaidReport] Packet data:`, packet.data);
+
         let { raid, player1, player2, player3, player4, reporter, seasonRating, guildXP, durationSeconds } = packet.data;
+
         if (!raid || !player1 || !player2 || !player3 || !player4 || !guildXP) {
-            console.warn(`Invalid raid report packet: missing required fields from client ${client.uuid}`);
+            console.error(`[RaidReport] ❌ Invalid packet - missing fields:`, {
+                raid: !!raid,
+                player1: !!player1,
+                player2: !!player2,
+                player3: !!player3,
+                player4: !!player4,
+                guildXP: !!guildXP
+            });
             return null;
         }
 
-        if (!seasonRating) seasonRating = 0;
+        if (!seasonRating) {
+            console.log(`[RaidReport] No season rating provided, defaulting to 0`);
+            seasonRating = 0;
+        }
 
         const baseKey = this.generateBaseKey(player1, player2, player3, player4, raid);
         const reportKey = this.generateReportKey(player1, player2, player3, player4, raid, durationSeconds);
 
+        console.log(`[RaidReport] Generated keys - base: ${baseKey}, report: ${reportKey}`);
+
         const result = await this.processRaidSafely(baseKey, client);
+        console.log(`[RaidReport] Processing result:`, result);
 
         if (!result.shouldProcess) {
             if (result.isDuplicate) {
-                console.log(`Duplicate raid filtered: ${baseKey}`);
+                console.log(`[RaidReport] 🔄 Duplicate raid filtered: ${baseKey}`);
+            } else {
+                console.log(`[RaidReport] ⏸️  Raid not ready to process yet: ${baseKey}`);
             }
             return null;
         }
@@ -132,7 +189,15 @@ class RaidReportService {
         const finalReportKey = result.reportKey || reportKey;
         const [finalRaid, p1, p2, p3, p4, finalTime] = finalReportKey.split(':');
 
-        await this.processRaidReport(finalRaid, p1, p2, p3, p4, seasonRating, guildXP, reporter, finalTime);
+        console.log(`[RaidReport] 🚀 PROCESSING RAID - finalReportKey: ${finalReportKey}`);
+
+        try {
+            await this.processRaidReport(finalRaid, p1, p2, p3, p4, seasonRating, guildXP, reporter, finalTime);
+            console.log(`[RaidReport] ✅ Raid processed successfully`);
+        } catch (error) {
+            console.error(`[RaidReport] ❌ Error processing raid:`, error);
+            throw error;
+        }
 
         return {
             type: 'raid_report_ack',
@@ -144,45 +209,67 @@ class RaidReportService {
     }
 
     async processRaidReport(raid, player1, player2, player3, player4, seasonRating, guildXP, reporter, time = null) {
+        console.log(`[RaidReport] ====== PROCESSING RAID REPORT ======`);
+        console.log(`[RaidReport] Raid: ${raid}`);
+        console.log(`[RaidReport] Players: ${player1}, ${player2}, ${player3}, ${player4}`);
+        console.log(`[RaidReport] Reporter: ${reporter}, Rating: ${seasonRating}, XP: ${guildXP}, Time: ${time}`);
+
         const players = [player1, player2, player3, player4];
         const resolvedUUIDs = [];
 
         for (let i = 0; i < players.length; i++) {
             const player = players[i];
+            console.log(`[RaidReport] Resolving UUID for player ${i + 1}: ${player}`);
+
             let uuid = await getPlayerUUID(player);
+            console.log(`[RaidReport] Database lookup result: ${uuid || 'not found'}`);
 
             if (!uuid) {
+                console.log(`[RaidReport] Requesting UUID from Mojang API for ${player}`);
                 uuid = await requestUUID(player);
+                console.log(`[RaidReport] Mojang API result: ${uuid || 'not found'}`);
             }
 
             if (!uuid) {
+                console.error(`[RaidReport] ❌ Could not resolve UUID for player: ${player}`);
                 throw new Error(`Invalid player: ${player}`);
             }
 
-            if (!await getMemberByUuid(uuid)) {
-                console.log(`Player ${player} is not in guild, aborting raid report`);
+            console.log(`[RaidReport] Checking guild membership for ${player} (${uuid})`);
+            const memberInfo = await getMemberByUuid(uuid);
+            if (!memberInfo) {
+                console.error(`[RaidReport] ❌ Player ${player} is not in guild`);
                 throw new Error(`Invalid player: ${player}`);
             }
+            console.log(`[RaidReport] ✅ Player ${player} is in guild`);
 
             resolvedUUIDs[i] = uuid;
         }
 
-        console.log(`Processing raid report: ${raid} with players [${players.join(', ')}] reported by ${reporter}${time ? ' at ' + time : ''}`);
-
-        console.log(`Raid Report Log: raid - ${raid} players - ${resolvedUUIDs[0]} ${resolvedUUIDs[1]} ${resolvedUUIDs[2]} ${resolvedUUIDs[3]} reporter - ${reporter} season rating - ${seasonRating} guild XP - ${guildXP}${time ? ' time - ' + time : ''}`);
-        await insertRaid(raid, resolvedUUIDs[0], resolvedUUIDs[1], resolvedUUIDs[2], resolvedUUIDs[3], reporter, seasonRating, guildXP, time);
+        console.log(`[RaidReport] All UUIDs resolved:`, resolvedUUIDs);
+        console.log(`[RaidReport] Inserting raid into database...`);
 
         try {
-            console.log(`Sent Discord notification for raid: ${raid}`);
-            await sendRaidEmbed(raid, player1, player2, player3, player4, time);
+            await insertRaid(raid, resolvedUUIDs[0], resolvedUUIDs[1], resolvedUUIDs[2], resolvedUUIDs[3], reporter, seasonRating, guildXP, time);
+            console.log(`[RaidReport] ✅ Raid inserted into database successfully`);
         } catch (error) {
-            console.error(`Failed to send Discord notification for raid ${raid}:`, error);
+            console.error(`[RaidReport] ❌ Database insertion failed:`, error);
+            throw error;
         }
 
-        console.log(`Successfully reported raid: ${raid} with players [${players.join(', ')}] reported by ${reporter}`);
+        try {
+            console.log(`[RaidReport] Sending Discord notification...`);
+            await sendRaidEmbed(raid, player1, player2, player3, player4, time);
+            console.log(`[RaidReport] ✅ Discord notification sent`);
+        } catch (error) {
+            console.error(`[RaidReport] ❌ Discord notification failed:`, error);
+        }
+
+        console.log(`[RaidReport] ====== RAID REPORT COMPLETE ======`);
     }
 
     startCleanup() {
+        console.log(`[RaidReport] Starting cleanup interval (${this.cleanupInterval}ms)`);
         setInterval(() => {
             const now = Date.now();
             const expiredHashes = [];
@@ -198,18 +285,21 @@ class RaidReportService {
             });
 
             if (expiredHashes.length > 0) {
-                console.log(`Cleaned up ${expiredHashes.length} expired raid entries`);
+                console.log(`[RaidReport] 🧹 Cleaned up ${expiredHashes.length} expired raid entries`);
             }
         }, this.cleanupInterval);
     }
 
     getStats() {
-        return {
+        const stats = {
             recentRaidsCount: this.recentRaids.size,
-            pendingReportsCount: this.pendingReports.size,
+            raidDataCount: this.raidData.size,
+            activeLocks: this.raidLocks.size,
             cacheExpiry: this.cacheExpiry,
             cleanupInterval: this.cleanupInterval
         };
+        console.log(`[RaidReport] Current stats:`, stats);
+        return stats;
     }
 }
 
