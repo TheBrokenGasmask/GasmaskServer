@@ -69,11 +69,16 @@ class RaidReportService {
                     const parts = hash.split(':');
                     const [player1, player2, player3, player4, raid] = parts;
 
-                    const finalReportKey = data.timeReport || reportKey;
-                    const reportParts = finalReportKey.split(':');
-                    const time = reportParts.length > 5 ? reportParts[5] : null;
+                    // Determine final time: use timeReport if available, otherwise use stored durationSeconds
+                    let time = null;
+                    if (data.timeReport) {
+                        const reportParts = data.timeReport.split(':');
+                        time = reportParts.length > 5 ? reportParts[5] : null;
+                    } else if (data.durationSeconds) {
+                        time = data.durationSeconds;
+                    }
 
-                    console.log(`Auto-processing ${hash}: using timeReport=${data.timeReport}, final time=${time}`);
+                    console.log(`Auto-processing ${hash}: using timeReport=${data.timeReport}, durationSeconds=${data.durationSeconds}, final time=${time}`);
 
                     try {
                         await this.processRaidReport(
@@ -111,7 +116,8 @@ class RaidReportService {
                 thresholdMet: null,
                 seasonRating: null,
                 guildXP: null,
-                reporter: null
+                reporter: null,
+                durationSeconds: null
             });
         }
 
@@ -153,6 +159,10 @@ class RaidReportService {
             }
             if (!data.reporter && client.packet?.data?.reporter) {
                 data.reporter = client.packet.data.reporter;
+            }
+            if (client.packet?.data?.durationSeconds) {
+                data.durationSeconds = client.packet.data.durationSeconds;
+                console.log(`Stored durationSeconds for ${hash}: ${data.durationSeconds}`);
             }
         }
 
