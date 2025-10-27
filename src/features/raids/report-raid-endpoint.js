@@ -69,16 +69,16 @@ class RaidReportService {
                     const parts = hash.split(':');
                     const [player1, player2, player3, player4, raid] = parts;
 
-                    // Determine final time: use timeReport if available, otherwise use stored durationSeconds
+                    // Determine final time: use timeReport if available, otherwise use stored duration
                     let time = null;
                     if (data.timeReport) {
                         const reportParts = data.timeReport.split(':');
                         time = reportParts.length > 5 ? reportParts[5] : null;
-                    } else if (data.durationSeconds) {
-                        time = data.durationSeconds;
+                    } else if (data.duration) {
+                        time = data.duration;
                     }
 
-                    console.log(`Auto-processing ${hash}: using timeReport=${data.timeReport}, durationSeconds=${data.durationSeconds}, final time=${time}`);
+                    console.log(`Auto-processing ${hash}: using timeReport=${data.timeReport}, duration=${data.duration}, final time=${time}`);
 
                     try {
                         await this.processRaidReport(
@@ -117,7 +117,7 @@ class RaidReportService {
                 seasonRating: null,
                 guildXP: null,
                 reporter: null,
-                durationSeconds: null
+                duration: null
             });
         }
 
@@ -160,9 +160,9 @@ class RaidReportService {
             if (!data.reporter && client.packet?.data?.reporter) {
                 data.reporter = client.packet.data.reporter;
             }
-            if (client.packet?.data?.durationSeconds) {
-                data.durationSeconds = client.packet.data.durationSeconds;
-                console.log(`Stored durationSeconds for ${hash}: ${data.durationSeconds}`);
+            if (client.packet?.data?.duration) {
+                data.duration = client.packet.data.duration;
+                console.log(`Stored duration for ${hash}: ${data.duration}`);
             }
         }
 
@@ -177,7 +177,7 @@ class RaidReportService {
     }
 
     async handleRaidReport(client, packet) {
-        let { raid, player1, player2, player3, player4, reporter, seasonRating, guildXP, durationSeconds } = packet.data;
+        let { raid, player1, player2, player3, player4, reporter, seasonRating, guildXP, duration } = packet.data;
 
         if (!raid || !player1 || !player2 || !player3 || !player4 || !guildXP) {
             console.warn(`Invalid raid report packet: missing required fields from client ${client.uuid}`);
@@ -187,7 +187,7 @@ class RaidReportService {
         if (!seasonRating) seasonRating = 0;
 
         const baseKey = this.generateBaseKey(player1, player2, player3, player4, raid);
-        const reportKey = this.generateReportKey(player1, player2, player3, player4, raid, durationSeconds);
+        const reportKey = this.generateReportKey(player1, player2, player3, player4, raid, duration);
 
         client.packet = packet;
 
