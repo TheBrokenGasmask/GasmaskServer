@@ -269,16 +269,10 @@ class Token {
         this.authenticated = false;
         this.createdAt = new Date();
         this.lastValidated = new Date();
-        this.authAttempts = 0;
     }
 
     authenticate() {
         this.authenticated = true;
-        this.lastValidated = new Date();
-        this.authAttempts = 0;
-    }
-
-    updateLastValidated() {
         this.lastValidated = new Date();
     }
 
@@ -289,6 +283,15 @@ class Token {
     isExpired() {
         const now = Date.now();
         return (now - this.createdAt.getTime()) > TOKEN_EXPIRY_TIME;
+    }
+
+    updateLastValidated() {
+        this.lastValidated = new Date();
+
+        const age = this.getAge();
+        if (age > 4 * 60 * 60 * 1000) { // 4 hours
+            this.createdAt = new Date(Date.now() - (2 * 60 * 60 * 1000)); // Reset age to 2 hours
+        }
     }
 
     getAge() {

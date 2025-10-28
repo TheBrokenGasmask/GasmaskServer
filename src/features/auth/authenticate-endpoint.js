@@ -17,13 +17,13 @@ class AuthenticateEndpoint {
             }
 
             const existingToken = getToken(uuid);
-            if (existingToken && existingToken.isAuthenticated() && existingToken.getAge() < 60 * 60 * 1000) {
-                return res.status(200).send(existingToken.serverId || 'existing-session');
-            }
-
-            // Always remove old token before creating new one
             if (existingToken) {
-                removeToken(uuid);
+                const age = existingToken.getAge();
+                if (age > 60 * 60 * 1000 || !existingToken.isAuthenticated()) {
+                    removeToken(uuid);
+                } else {
+                    return res.status(200).send(existingToken.serverId || 'existing-session');
+                }
             }
 
             const tokens = generateTokenWithServerId(uuid);
@@ -31,6 +31,7 @@ class AuthenticateEndpoint {
 
             await sleep(2000);
             await this.checkForAuthentication(uuid, tokens.serverId);
+
         } catch (error) {
             console.error(`Authentication endpoint error for UUID ${uuid}:`, error);
             res.status(500).send("Internal server error");
