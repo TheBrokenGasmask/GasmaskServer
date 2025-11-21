@@ -111,7 +111,7 @@ class DiscordWebhook {
 }
 
     async sendMinecraftSkinMessage(username, message, uuid = null) {
-        let avatarUrl = `https://images.weserv.nl/?url=crafatar.com/renders/head/${uuid}?overlay=true&w=64&h=64&output=png&we`;
+        let avatarUrl = `https://nmsr.nickac.dev/headiso/${uuid}`;
         return await this.sendMessage(username, message, avatarUrl);
     }
 }
