@@ -185,18 +185,21 @@ class WebSocketManager {
 
     handleDisconnect(clientId, code, reason) {
         const client = this.connections.get(clientId);
-        if (client) {
-            console.log(`Client disconnected: ${clientId} UUID: ${client.uuid || 'unauthenticated'} (${code}: ${reason})`);
-            
-            // Clear heartbeat timer
-            if (client.heartbeatTimer) {
-                clearInterval(client.heartbeatTimer);
-            }
-            
-            if (client.uuid) this.removeUuidConnection(client.uuid, clientId);
-            
-            this.connections.delete(clientId);
+        if (!client) return;
+
+        console.log(`Client disconnected: ${clientId} UUID: ${client.uuid || 'unauthenticated'} (${code}: ${reason})`);
+
+        if (client.heartbeatTimer) clearInterval(client.heartbeatTimer);
+
+        const shouldDeauthorize =
+            code === 1000 ||
+            code === 1008;
+        
+        if (client.uuid && shouldDeauthorize) {
+            this.removeUuidConnection(client.uuid, clientId);
         }
+
+        this.connections.delete(clientId);
     }
 
     handleError(clientId, error) {
