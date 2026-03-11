@@ -7,6 +7,10 @@ class DiscordWebhook {
         this.webhookUrl = null;
         this.enabled = this.config.enabled;
         this.discordClient = null;
+        this.requestQueue = [];
+        this.isProcessing = false;
+        this.lastRequestTime = 0;
+        this.minRequestInterval = 100; // Minimum 100ms between requests
     }
 
     setDiscordClient(client) {
@@ -57,6 +61,55 @@ class DiscordWebhook {
         }
     }
 
+    async processQueue() {
+        if (this.isProcessing || this.requestQueue.length === 0) {
+            return;
+        }
+
+        this.isProcessing = true;
+
+        while (this.requestQueue.length > 0) {
+            const now = Date.now();
+            const timeSinceLastRequest = now - this.lastRequestTime;
+
+            if (timeSinceLastRequest < this.minRequestInterval) {
+                await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest));
+            }
+
+            const { resolve, reject, payload } = this.requestQueue.shift();
+
+            try {
+                await axios.post(this.webhookUrl, payload, {
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    timeout: 10000
+                });
+                this.lastRequestTime = Date.now();
+                const messageType = typeof payload.content === 'string' && payload.embeds?.length === 0 ? 'message' : 'embed';
+                console.log(`Discord webhook ${messageType} sent successfully for ${payload.username}`);
+                resolve(true);
+            } catch (error) {
+                console.error('Failed to send Discord webhook message:', error.response?.data || error.message);
+
+                if (error.response?.status === 404) {
+                    console.log('Webhook appears to be invalid, clearing cache...');
+                    this.webhookUrl = null;
+                } else if (error.response?.status === 429) {
+                    console.warn('Discord webhook rate limited, waiting before retry...');
+                    const retryAfter = error.response?.headers?.['retry-after'] || 1000;
+                    await new Promise(resolve => setTimeout(resolve, retryAfter));
+                    this.requestQueue.unshift({ resolve, reject, payload });
+                    continue;
+                }
+
+                resolve(false);
+            }
+        }
+
+        this.isProcessing = false;
+    }
+
     async sendMessage(username, messageData, avatarUrl) {
         if (!this.enabled) {
             console.log('Chat bridge is disabled');
@@ -68,9 +121,8 @@ class DiscordWebhook {
             return false;
         }
 
-        try {
         console.log(avatarUrl)
-        
+
         let payload = {
             username: username,
             avatar_url: avatarUrl,
@@ -78,10 +130,9 @@ class DiscordWebhook {
         };
 
         if (typeof messageData === 'string') {
-            // Regular message
             payload.content = messageData;
+            payload.embeds = [];
         } else if (typeof messageData === 'object' && messageData !== null) {
-            // Embed data object
             payload.content = messageData.content || '';
             payload.embeds = messageData.embeds || [];
             payload.attachments = messageData.attachments || [];
@@ -89,26 +140,11 @@ class DiscordWebhook {
             throw new Error('Invalid messageData format');
         }
 
-        await axios.post(this.webhookUrl, payload, {
-            headers: {
-                'Content-Type': 'application/json'
-            }
+        return new Promise((resolve, reject) => {
+            this.requestQueue.push({ resolve, reject, payload });
+            this.processQueue();
         });
-
-        const messageType = typeof messageData === 'string' ? 'message' : 'embed';
-        console.log(`Discord webhook ${messageType} sent successfully for ${username}`);
-        return true;
-    } catch (error) {
-        console.error('Failed to send Discord webhook message:', error.response?.data || error.message);
-        
-        if (error.response?.status === 404) {
-            console.log('Webhook appears to be invalid, clearing cache...');
-            this.webhookUrl = null;
-        }
-        
-        return false;
     }
-}
 
     async sendMinecraftSkinMessage(username, message, uuid = null) {
         let avatarUrl = `https://nmsr.nickac.dev/headiso/${uuid}`;
