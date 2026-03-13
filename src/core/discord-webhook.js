@@ -76,34 +76,53 @@ class DiscordWebhook {
                 await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest));
             }
 
-            const { resolve, reject, payload } = this.requestQueue.shift();
+            const { resolve, reject, payload, retries = 0 } = this.requestQueue.shift();
 
             try {
                 await axios.post(this.webhookUrl, payload, {
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    timeout: 10000
+                    timeout: 10000,
+                    maxRedirects: 5,
+                    httpAgent: null,
+                    httpsAgent: null
                 });
                 this.lastRequestTime = Date.now();
                 const messageType = typeof payload.content === 'string' && payload.embeds?.length === 0 ? 'message' : 'embed';
                 console.log(`Discord webhook ${messageType} sent successfully for ${payload.username}`);
                 resolve(true);
             } catch (error) {
-                console.error('Failed to send Discord webhook message:', error.response?.data || error.message);
+                const errorMessage = error.response?.data || error.message;
+                const shouldRetry = retries < 3 && (
+                    error.code === 'ECONNRESET' ||
+                    error.code === 'ETIMEDOUT' ||
+                    error.code === 'ECONNREFUSED' ||
+                    error.code === 'ENOTFOUND' ||
+                    error.message.includes('timeout') ||
+                    error.message.includes('connect') ||
+                    error.message.includes('socket') ||
+                    error.response?.status === 429 ||
+                    (error.response?.status >= 500 && error.response?.status < 600)
+                );
 
                 if (error.response?.status === 404) {
-                    console.log('Webhook appears to be invalid, clearing cache...');
+                    console.error('Webhook appears to be invalid (404), clearing cache...');
                     this.webhookUrl = null;
-                } else if (error.response?.status === 429) {
-                    console.warn('Discord webhook rate limited, waiting before retry...');
-                    const retryAfter = error.response?.headers?.['retry-after'] || 1000;
-                    await new Promise(resolve => setTimeout(resolve, retryAfter));
-                    this.requestQueue.unshift({ resolve, reject, payload });
-                    continue;
-                }
+                    resolve(false);
+                } else if (shouldRetry) {
+                    const retryDelay = error.response?.status === 429
+                        ? (error.response?.headers?.['retry-after'] || 1000)
+                        : Math.min(1000 * Math.pow(2, retries), 5000);
 
-                resolve(false);
+                    console.warn(`Discord webhook failed (${errorMessage}), retrying in ${retryDelay}ms (attempt ${retries + 1}/3)`);
+                    await new Promise(r => setTimeout(r, retryDelay));
+                    this.requestQueue.unshift({ resolve, reject, payload, retries: retries + 1 });
+                    continue;
+                } else {
+                    console.error('Failed to send Discord webhook message:', errorMessage);
+                    resolve(false);
+                }
             }
         }
 
