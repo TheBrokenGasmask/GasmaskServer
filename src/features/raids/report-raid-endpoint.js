@@ -173,6 +173,35 @@ class RaidReportService {
             return null;
         }
 
+        // Sanitize player names: trim whitespace and validate format
+        const sanitizeName = (name) => {
+            if (!name || typeof name !== 'string') return null;
+            const trimmed = name.trim();
+            // Minecraft usernames: 3-16 chars, alphanumeric and underscores only
+            if (!/^[a-zA-Z0-9_]{3,16}$/.test(trimmed)) {
+                console.warn(`Invalid player name format: "${name}" (trimmed: "${trimmed}")`);
+                return null;
+            }
+            return trimmed;
+        };
+
+        player1 = sanitizeName(player1);
+        player2 = sanitizeName(player2);
+        player3 = sanitizeName(player3);
+        player4 = sanitizeName(player4);
+
+        if (!player1 || !player2 || !player3 || !player4) {
+            console.error(`Raid report rejected: invalid player names. Raw data: [${packet.data.player1}, ${packet.data.player2}, ${packet.data.player3}, ${packet.data.player4}]`);
+            return {
+                type: 'raid_report_ack',
+                data: {
+                    success: false,
+                    error: 'Invalid player names',
+                    timestamp: Date.now()
+                }
+            };
+        }
+
         if (!seasonRating) seasonRating = 0;
 
         const baseKey = this.generateBaseKey(player1, player2, player3, player4, raid);
