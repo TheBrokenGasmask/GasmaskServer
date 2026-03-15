@@ -16,13 +16,13 @@ module.exports = {
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('commander')
-                .setDescription('Commander LE bonus per raid')
+            option.setName('raidcaptain')
+                .setDescription('Raid Captain LE bonus per raid')
                 .setRequired(true)
         )
         .addStringOption(option =>
-            option.setName('officer')
-                .setDescription('Officer LE bonus per raid')
+            option.setName('commander')
+                .setDescription('Commander LE bonus per raid')
                 .setRequired(true)
         )
         .addStringOption(option =>
@@ -32,8 +32,8 @@ module.exports = {
         ),
     async execute(interaction) {
         const basePay = parseFloat(interaction.options.getString('base'));
+        const raidCaptainPay = parseFloat(interaction.options.getString('raidcaptain'));
         const commanderPay = parseFloat(interaction.options.getString('commander'));
-        const officerPay = parseFloat(interaction.options.getString('officer'));
         const advisorPay = parseFloat(interaction.options.getString('advisor'));
         try{
             const alertConfig = config.get('alert-command');
@@ -77,7 +77,7 @@ module.exports = {
                 switch (rankNumber) {
                     case 1: return "Recruit";
                     case 2: return "Recruiter";
-                    case 3: return "Captain";
+                    case 3: return "War Captain";
                     case 4: return "Strategist";
                     case 5: return "Chief";
                     case 6: return "Owner";
@@ -175,11 +175,11 @@ module.exports = {
                 
                 let rankBonus = 0;
                 const rankLower = member.rankString.toLowerCase();
-                
-                if (rankLower === 'commander') {
+
+                if (rankLower === 'raid captain') {
+                    rankBonus = member.raidCount * raidCaptainPay;
+                } else if (rankLower === 'commander' || rankLower === 'strategist') {
                     rankBonus = member.raidCount * commanderPay;
-                } else if (rankLower === 'officer' || rankLower === 'strategist') {
-                    rankBonus = member.raidCount * officerPay;
                 } else if (['advisor', 'chief', 'council', 'owner'].includes(rankLower)) {
                     rankBonus = member.raidCount * advisorPay;
                 }
