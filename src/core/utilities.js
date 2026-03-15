@@ -151,7 +151,7 @@ function requestUUID(username) {
     const url = `https://api.mojang.com/users/profiles/minecraft/${username}`;
 
     request(url, function (error, response, body) {
-      if (!error && response.statusCode === 200) {
+      if (!error && response && response.statusCode === 200) {
         let data = JSON.parse(body);
         if (data && data.id) {
           let id = data.id.replace(
@@ -173,8 +173,9 @@ function requestUUID(username) {
           resolve(null);
         }
       } else {
-        console.error('Mojang request failed', response.statusMessage);
-        reject(error);
+        const errorMsg = response?.statusMessage || error?.message || 'Unknown error';
+        console.error('Mojang request failed', errorMsg);
+        resolve(null); // Resolve with null instead of rejecting
       }
     });
   }).catch(err => {
