@@ -145,6 +145,50 @@ async function createTables() {
             console.log("Migration may have already been completed or no verified links exist");
         }
 
+        // Create tracker tables
+        const createGuildMemberEventsTableQuery = `
+            CREATE TABLE IF NOT EXISTS guild_member_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                uuid VARCHAR(36) NOT NULL,
+                username VARCHAR(16) NOT NULL,
+                event_type ENUM('joined', 'left', 'rank_changed') NOT NULL,
+                old_rank INT DEFAULT NULL,
+                new_rank INT DEFAULT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_uuid (uuid),
+                INDEX idx_event_type (event_type),
+                INDEX idx_timestamp (timestamp)
+            );
+        `;
+        await connection.execute(createGuildMemberEventsTableQuery);
+
+        const createTerritoryEventsTableQuery = `
+            CREATE TABLE IF NOT EXISTS territory_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                territory VARCHAR(100) NOT NULL,
+                event_type ENUM('gained', 'lost') NOT NULL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_territory (territory),
+                INDEX idx_event_type (event_type),
+                INDEX idx_timestamp (timestamp)
+            );
+        `;
+        await connection.execute(createTerritoryEventsTableQuery);
+
+        const createTrackerChannelConfigTableQuery = `
+            CREATE TABLE IF NOT EXISTS tracker_channel_config (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                channel_id VARCHAR(20) NOT NULL,
+                tracker_type ENUM('territory', 'members') NOT NULL,
+                enabled BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_channel_tracker (channel_id, tracker_type),
+                INDEX idx_channel (channel_id),
+                INDEX idx_enabled (enabled)
+            );
+        `;
+        await connection.execute(createTrackerChannelConfigTableQuery);
+
         connection.release();
     } catch (err) {
         console.error("Error creating table: ", err);
