@@ -153,4 +153,46 @@ async function isPlayerInGuild(uuid) {
     }
 }
 
-module.exports = {getGuildRank, isPlayerInGuild, getPlayerGuild, getPlayerGuildInfo, getWynnGuild};
+function getTerritoryList() {
+    return new Promise((resolve, reject) => {
+        const makeRequest = (retries = 3) => {
+            const options = {
+                method: 'GET',
+                url: 'https://api.wynncraft.com/v3/guild/list/territory',
+                headers: {
+                    Authorization: `Bearer ${config.get("wynncraft-token")}`
+                },
+                timeout: 10000,
+                json: true,
+                forever: false,
+                pool: {maxSockets: 100}
+            };
+
+            request(options, (error, response, body) => {
+                if (error) {
+                    console.error('Territory list fetch failed:', error.message);
+                    if (retries > 0 && (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT')) {
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+                    return reject(new Error(`Territory list API failed: ${error.message}`));
+                }
+
+                if (response.statusCode !== 200) {
+                    console.error(`Territory list API returned ${response.statusCode}`);
+                    if (retries > 0 && response.statusCode >= 500) {
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+                    return reject(new Error(`Territory list API: Status ${response.statusCode}`));
+                }
+
+                resolve(body);
+            });
+        };
+
+        makeRequest();
+    });
+}
+
+
+
+module.exports = {getGuildRank, isPlayerInGuild, getPlayerGuild, getPlayerGuildInfo, getWynnGuild, getWynnGuild, getWynnUser, getTerritoryList};

@@ -4,6 +4,8 @@ const {token} = require("../../config.json");
 const {readdirSync} = require("fs");
 const { chatBridge } = require('../features/chat-bridge/chat-bridge-service');
 const { rankService } = require('../features/ranks/rank-service');
+const { initializeTerritoryTracker } = require('../features/trackers/territory-tracker');
+const { initializeGuildMemberTracker } = require('../features/trackers/guild-tracker');
 require('./deploy-commands');
 
 const client = new Client({ 
@@ -48,6 +50,11 @@ client.once('ready', () => {
     // Initialize the rank service with Discord client
     rankService.setDiscordClient(client);
     console.log('Rank service initialized with Discord client');
+    
+    // Initialize the trackers with Discord client
+    initializeTerritoryTracker(client);
+    initializeGuildMemberTracker(client);
+    console.log('Event trackers initialized');
 });
 
 client.on(Events.InteractionCreate, async interaction => {
