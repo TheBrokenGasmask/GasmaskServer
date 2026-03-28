@@ -7,6 +7,7 @@ const {requestUsername} = require("./utilities");
 
 let pool;
 
+/*
 function databaseInit() {
 
     pool = mysql.createPool({
@@ -21,7 +22,7 @@ function databaseInit() {
     });
 
     createTables();
-}
+}*/
 
 async function createTables() {
     try {
@@ -136,7 +137,7 @@ async function createTables() {
                 SET p.discord_id = al.discord_id
                 WHERE al.verified = TRUE AND p.discord_id IS NULL;
             `;
-            
+
             const [migrationResult] = await connection.execute(migrationQuery);
             if (migrationResult.affectedRows > 0) {
                 console.log(`Migrated ${migrationResult.affectedRows} verified account links to players table`);
@@ -218,7 +219,7 @@ async function insertWar(player, timeInWar, towerEhp, towerDps, territory, owner
         const insertQuery = `
             INSERT INTO wars (player, time_in_war, tower_ehp, tower_dps, territory, owner_guild)
             VALUES (?, ?, ?, ?, ?, ?);
-            
+
         `;
 
         await connection.execute(insertQuery, [player, timeInWar, towerEhp, towerDps, territory, ownerGuild]);
@@ -250,7 +251,7 @@ async function checkForRecentRaid(player) {
         const query = `
             SELECT * FROM raids
             WHERE (player_1 = ? OR player_2 = ? OR player_3 = ? OR player_4 = ?)
-            AND time > DATE_SUB(NOW(), INTERVAL 1 MINUTE);
+              AND time > DATE_SUB(NOW(), INTERVAL 1 MINUTE);
         `;
 
         const [rows] = await connection.execute(query, [player, player, player, player]);
@@ -306,7 +307,7 @@ async function insertPlayer(uuid, username) {
         const insertQuery = `
             INSERT INTO players (uuid, username, guild, guild_rank, needs_aspects)
             VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE username = VALUES(username), guild = VALUES(guild), guild_rank = VALUES(guild_rank);
+                ON DUPLICATE KEY UPDATE username = VALUES(username), guild = VALUES(guild), guild_rank = VALUES(guild_rank);
         `;
 
         await connection.execute(insertQuery, [uuid, username, guild, guildRank, 1]);
@@ -337,7 +338,7 @@ async function getGuild(uuid) {
 
 async function updateGuild(uuid) {
     let { guild, guildRank } = await getPlayerGuildInfo(uuid);
-    
+
     const guildTag = config.get("guild-tag")
 
     if (!guild || guild !== guildTag) {
@@ -440,16 +441,16 @@ async function getWars(uuid, startTimestamp = null, endTimestamp = null) {
 async function getRaidCount(raidId = null, startTimestamp = null, endTimestamp = null) {
     try {
         const connection = await pool.getConnection();
-                
+
         let query = `SELECT COUNT(*) as count FROM raids`;
         const params = [];
         const conditions = [];
-                
+
         if (raidId !== null) {
             conditions.push(`raid = ?`);
             params.push(raidId);
         }
-                
+
         if (startTimestamp && endTimestamp) {
             conditions.push(`time BETWEEN ? AND ?`);
             params.push(startTimestamp, endTimestamp);
@@ -457,13 +458,13 @@ async function getRaidCount(raidId = null, startTimestamp = null, endTimestamp =
             conditions.push(`time > ?`);
             params.push(startTimestamp);
         }
-                
+
         if (conditions.length > 0) {
             query += ` WHERE ${conditions.join(' AND ')}`;
         }
-                
+
         const [rows] = await connection.execute(query, params);
-                
+
         connection.release();
         return rows[0].count;
     } catch (err) {
@@ -729,21 +730,21 @@ async function toggleNeedsAspects(uuid) {
 async function createAccountLink(discordId, minecraftUuid, minecraftUsername, verificationCode, expiresAt) {
     try {
         const connection = await pool.getConnection();
-        
+
         // Delete any existing unverified link for this discord user
         await connection.execute(
-            'DELETE FROM account_links WHERE discord_id = ? AND verified = FALSE', 
+            'DELETE FROM account_links WHERE discord_id = ? AND verified = FALSE',
             [discordId]
         );
-        
+
         // Convert JavaScript Date to MySQL timestamp format
         const mysqlExpiresAt = expiresAt.toISOString().slice(0, 19).replace('T', ' ');
-        
+
         const insertQuery = `
             INSERT INTO account_links (discord_id, minecraft_uuid, minecraft_username, verification_code, expires_at)
             VALUES (?, ?, ?, ?, ?);
         `;
-        
+
         await connection.execute(insertQuery, [discordId, minecraftUuid, minecraftUsername, verificationCode, mysqlExpiresAt]);
         connection.release();
         return true;
@@ -756,44 +757,44 @@ async function createAccountLink(discordId, minecraftUuid, minecraftUsername, ve
 async function verifyAccountLink(verificationCode) {
     try {
         const connection = await pool.getConnection();
-        
+
         // Check if code exists and hasn't expired
         const selectQuery = `
             SELECT * FROM account_links 
             WHERE verification_code = ? AND verified = FALSE AND expires_at > NOW();
         `;
-        
+
         const [rows] = await connection.execute(selectQuery, [verificationCode]);
-        
+
         if (rows.length === 0) {
             connection.release();
             return null; // Code not found or expired
         }
-        
+
         const link = rows[0];
-        
+
         // Update to verified
         const updateQuery = `
             UPDATE account_links 
             SET verified = TRUE, verified_at = UTC_TIMESTAMP() 
             WHERE id = ?;
         `;
-        
+
         await connection.execute(updateQuery, [link.id]);
-        
+
         // Add or update the player with discord_id
         await insertPlayer(link.minecraft_uuid, link.minecraft_username);
-        
+
         const updatePlayerQuery = `
-            UPDATE players 
-            SET discord_id = ? 
+            UPDATE players
+            SET discord_id = ?
             WHERE uuid = ?;
         `;
-        
+
         await connection.execute(updatePlayerQuery, [link.discord_id, link.minecraft_uuid]);
-        
+
         connection.release();
-        
+
         return {
             discordId: link.discord_id,
             minecraftUuid: link.minecraft_uuid,
@@ -808,19 +809,19 @@ async function verifyAccountLink(verificationCode) {
 async function getAccountLink(discordId) {
     try {
         const connection = await pool.getConnection();
-        
+
         const selectQuery = `
             SELECT p.uuid, p.username, p.guild, p.needs_aspects, p.discord_id, al.verified_at
             FROM players p
-            LEFT JOIN account_links al ON p.uuid = al.minecraft_uuid AND al.verified = TRUE
+                     LEFT JOIN account_links al ON p.uuid = al.minecraft_uuid AND al.verified = TRUE
             WHERE p.discord_id = ?;
         `;
-        
+
         const [rows] = await connection.execute(selectQuery, [discordId]);
         connection.release();
-        
+
         if (rows.length === 0) return null;
-        
+
         const player = rows[0];
         return {
             discord_id: player.discord_id,
@@ -838,18 +839,18 @@ async function getAccountLink(discordId) {
 async function getAccountLinkByMinecraft(minecraftUuid) {
     try {
         const connection = await pool.getConnection();
-        
+
         const selectQuery = `
             SELECT p.uuid, p.username, p.guild, p.needs_aspects, p.discord_id
             FROM players p
             WHERE p.uuid = ? AND p.discord_id IS NOT NULL;
         `;
-        
+
         const [rows] = await connection.execute(selectQuery, [minecraftUuid]);
         connection.release();
-        
+
         if (rows.length === 0) return null;
-        
+
         const player = rows[0];
         return {
             discord_id: player.discord_id,
@@ -866,24 +867,24 @@ async function getAccountLinkByMinecraft(minecraftUuid) {
 async function removeAccountLink(discordId) {
     try {
         const connection = await pool.getConnection();
-        
+
         // Remove from account_links table
         const deleteQuery = `
             DELETE FROM account_links WHERE discord_id = ?;
         `;
-        
+
         await connection.execute(deleteQuery, [discordId]);
-        
+
         // Clear discord_id from players table
         const updatePlayerQuery = `
             UPDATE players 
             SET discord_id = NULL 
             WHERE discord_id = ?;
         `;
-        
+
         const [result] = await connection.execute(updatePlayerQuery, [discordId]);
         connection.release();
-        
+
         return result.affectedRows > 0;
     } catch (err) {
         console.error("Error removing account link: ", err);
@@ -894,24 +895,24 @@ async function removeAccountLink(discordId) {
 async function removeAccountLinkByMinecraft(minecraftUuid) {
     try {
         const connection = await pool.getConnection();
-        
+
         // Remove from account_links table
         const deleteQuery = `
             DELETE FROM account_links WHERE minecraft_uuid = ?;
         `;
-        
+
         await connection.execute(deleteQuery, [minecraftUuid]);
-        
+
         // Clear discord_id from players table
         const updatePlayerQuery = `
-            UPDATE players 
-            SET discord_id = NULL 
+            UPDATE players
+            SET discord_id = NULL
             WHERE uuid = ?;
         `;
-        
+
         const [result] = await connection.execute(updatePlayerQuery, [minecraftUuid]);
         connection.release();
-        
+
         return result.affectedRows > 0;
     } catch (err) {
         console.error("Error removing account link by minecraft: ", err);
@@ -922,20 +923,20 @@ async function removeAccountLinkByMinecraft(minecraftUuid) {
 async function getUnverifiedAccountLink(verificationCode) {
     try {
         const connection = await pool.getConnection();
-        
+
         // Get unverified link without marking it as verified
         const selectQuery = `
-            SELECT * FROM account_links 
+            SELECT * FROM account_links
             WHERE verification_code = ? AND verified = FALSE AND expires_at > NOW();
         `;
-        
+
         const [rows] = await connection.execute(selectQuery, [verificationCode]);
         connection.release();
-        
+
         if (rows.length === 0) {
             return null; // Code not found or expired
         }
-        
+
         return rows[0];
     } catch (err) {
         console.error("Error getting unverified account link: ", err);
@@ -946,15 +947,15 @@ async function getUnverifiedAccountLink(verificationCode) {
 async function cleanupExpiredLinks() {
     try {
         const connection = await pool.getConnection();
-        
+
         const deleteQuery = `
-            DELETE FROM account_links 
+            DELETE FROM account_links
             WHERE verified = FALSE AND expires_at < NOW();
         `;
-        
+
         const [result] = await connection.execute(deleteQuery);
         connection.release();
-        
+
         return result.affectedRows;
     } catch (err) {
         console.error("Error cleaning up expired links: ", err);
@@ -965,16 +966,16 @@ async function cleanupExpiredLinks() {
 async function getPlayersWithVerifiedLinks() {
     try {
         const connection = await pool.getConnection();
-        
+
         const query = `
             SELECT p.uuid, p.username, p.guild, p.needs_aspects, p.discord_id
             FROM players p
             WHERE p.discord_id IS NOT NULL;
         `;
-        
+
         const [rows] = await connection.execute(query);
         connection.release();
-        
+
         // Transform to match expected format
         return rows.map(row => ({
             ...row,
@@ -989,21 +990,21 @@ async function getPlayersWithVerifiedLinks() {
 async function getAccountLinksForPlayers(playerUuids) {
     try {
         if (playerUuids.length === 0) return {};
-        
+
         const connection = await pool.getConnection();
-        
+
         // Create placeholders for IN clause
         const placeholders = playerUuids.map(() => '?').join(',');
-        
+
         const query = `
             SELECT uuid, discord_id, username
             FROM players 
             WHERE uuid IN (${placeholders}) AND discord_id IS NOT NULL;
         `;
-        
+
         const [rows] = await connection.execute(query, playerUuids);
         connection.release();
-        
+
         // Convert to map for quick lookup
         const linkMap = {};
         for (const row of rows) {
@@ -1012,7 +1013,7 @@ async function getAccountLinksForPlayers(playerUuids) {
                 minecraft_username: row.username
             };
         }
-        
+
         return linkMap;
     } catch (err) {
         console.error("Error getting account links for players: ", err);
@@ -1023,15 +1024,15 @@ async function getAccountLinksForPlayers(playerUuids) {
 async function getPlayerByDiscordId(discordId) {
     try {
         const connection = await pool.getConnection();
-        
+
         const query = `
             SELECT * FROM players
             WHERE discord_id = ?;
         `;
-        
+
         const [rows] = await connection.execute(query, [discordId]);
         connection.release();
-        
+
         return rows[0] || null;
     } catch (err) {
         console.error("Error getting player by discord ID: ", err);
@@ -1044,13 +1045,13 @@ async function getPlayerByDiscordId(discordId) {
 async function setTrackerEnabled(channelId, trackerType, enabled) {
     try {
         const connection = await pool.getConnection();
-        
+
         const query = `
             INSERT INTO tracker_channel_config (channel_id, tracker_type, enabled)
             VALUES (?, ?, ?)
-            ON DUPLICATE KEY UPDATE enabled = VALUES(enabled);
+                ON DUPLICATE KEY UPDATE enabled = VALUES(enabled);
         `;
-        
+
         await connection.execute(query, [channelId, trackerType, enabled ? 1 : 0]);
         connection.release();
         return true;
@@ -1063,15 +1064,15 @@ async function setTrackerEnabled(channelId, trackerType, enabled) {
 async function getEnabledChannelsForTracker(trackerType) {
     try {
         const connection = await pool.getConnection();
-        
+
         const query = `
             SELECT channel_id FROM tracker_channel_config
             WHERE tracker_type = ? AND enabled = TRUE;
         `;
-        
+
         const [rows] = await connection.execute(query, [trackerType]);
         connection.release();
-        
+
         return rows.map(row => row.channel_id);
     } catch (err) {
         console.error("Error getting enabled channels for tracker: ", err);
@@ -1082,12 +1083,12 @@ async function getEnabledChannelsForTracker(trackerType) {
 async function insertTerritoryEvent(territory, eventType) {
     try {
         const connection = await pool.getConnection();
-        
+
         const query = `
             INSERT INTO territory_events (territory, event_type)
             VALUES (?, ?);
         `;
-        
+
         await connection.execute(query, [territory, eventType]);
         connection.release();
         return true;
@@ -1100,12 +1101,12 @@ async function insertTerritoryEvent(territory, eventType) {
 async function insertMemberEvent(uuid, username, eventType, oldRank, newRank) {
     try {
         const connection = await pool.getConnection();
-        
+
         const query = `
             INSERT INTO guild_member_events (uuid, username, event_type, old_rank, new_rank)
             VALUES (?, ?, ?, ?, ?);
         `;
-        
+
         await connection.execute(query, [uuid, username, eventType, oldRank, newRank]);
         connection.release();
         return true;
@@ -1118,15 +1119,15 @@ async function insertMemberEvent(uuid, username, eventType, oldRank, newRank) {
 async function getTrackerState(channelId, trackerType) {
     try {
         const connection = await pool.getConnection();
-        
+
         const query = `
             SELECT enabled FROM tracker_channel_config
             WHERE channel_id = ? AND tracker_type = ?;
         `;
-        
+
         const [rows] = await connection.execute(query, [channelId, trackerType]);
         connection.release();
-        
+
         return rows.length > 0 ? rows[0].enabled === 1 : false;
     } catch (err) {
         console.error("Error getting tracker state: ", err);
@@ -1139,7 +1140,7 @@ async function databaseInit() {
     const user = config.get("sql.user");
     const password = config.get("sql.password");
     const database = config.get("sql.database");
-    
+
     console.log(`Connecting to SQL with: host=${host}, user=${user}, database=${database}`);
 
     pool = mysql.createPool({
@@ -1158,4 +1159,5 @@ async function databaseInit() {
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
-    createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId };
+    createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
+    setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState };
