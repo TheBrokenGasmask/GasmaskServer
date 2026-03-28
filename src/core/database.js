@@ -1039,6 +1039,123 @@ async function getPlayerByDiscordId(discordId) {
     }
 }
 
+// Tracker-related functions
+
+async function setTrackerEnabled(channelId, trackerType, enabled) {
+    try {
+        const connection = await pool.getConnection();
+        
+        const query = `
+            INSERT INTO tracker_channel_config (channel_id, tracker_type, enabled)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE enabled = VALUES(enabled);
+        `;
+        
+        await connection.execute(query, [channelId, trackerType, enabled ? 1 : 0]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error("Error setting tracker enabled: ", err);
+        return false;
+    }
+}
+
+async function getEnabledChannelsForTracker(trackerType) {
+    try {
+        const connection = await pool.getConnection();
+        
+        const query = `
+            SELECT channel_id FROM tracker_channel_config
+            WHERE tracker_type = ? AND enabled = TRUE;
+        `;
+        
+        const [rows] = await connection.execute(query, [trackerType]);
+        connection.release();
+        
+        return rows.map(row => row.channel_id);
+    } catch (err) {
+        console.error("Error getting enabled channels for tracker: ", err);
+        return [];
+    }
+}
+
+async function insertTerritoryEvent(territory, eventType) {
+    try {
+        const connection = await pool.getConnection();
+        
+        const query = `
+            INSERT INTO territory_events (territory, event_type)
+            VALUES (?, ?);
+        `;
+        
+        await connection.execute(query, [territory, eventType]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error("Error inserting territory event: ", err);
+        return false;
+    }
+}
+
+async function insertMemberEvent(uuid, username, eventType, oldRank, newRank) {
+    try {
+        const connection = await pool.getConnection();
+        
+        const query = `
+            INSERT INTO guild_member_events (uuid, username, event_type, old_rank, new_rank)
+            VALUES (?, ?, ?, ?, ?);
+        `;
+        
+        await connection.execute(query, [uuid, username, eventType, oldRank, newRank]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error("Error inserting member event: ", err);
+        return false;
+    }
+}
+
+async function getTrackerState(channelId, trackerType) {
+    try {
+        const connection = await pool.getConnection();
+        
+        const query = `
+            SELECT enabled FROM tracker_channel_config
+            WHERE channel_id = ? AND tracker_type = ?;
+        `;
+        
+        const [rows] = await connection.execute(query, [channelId, trackerType]);
+        connection.release();
+        
+        return rows.length > 0 ? rows[0].enabled === 1 : false;
+    } catch (err) {
+        console.error("Error getting tracker state: ", err);
+        return false;
+    }
+}
+
+async function databaseInit() {
+    const host = config.get("sql.host");
+    const user = config.get("sql.user");
+    const password = config.get("sql.password");
+    const database = config.get("sql.database");
+    
+    console.log(`Connecting to SQL with: host=${host}, user=${user}, database=${database}`);
+
+    pool = mysql.createPool({
+        host: host,
+        user: user,
+        password: password,
+        database: database,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        timezone: 'Z'
+    });
+
+    await createTables();
+}
+
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId };
