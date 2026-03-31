@@ -7,7 +7,8 @@ const {formatTime} = require("../../core/utilities");
 const raids = ["Nest of the Grootslangs",
     "Orphion's Nexus of Light",
     "The Canyon Colossus",
-    "The Nameless Anomaly"
+    "The Nameless Anomaly",
+    "The Wartorn Palace"
 ]
 
 const raidsAbbr = [
@@ -15,6 +16,7 @@ const raidsAbbr = [
     "NOL",
     "TCC",
     "TNA",
+    "TWP",
 ]
 
 function getWeeklyTimestamp() {
