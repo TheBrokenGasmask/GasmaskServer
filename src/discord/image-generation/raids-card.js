@@ -45,15 +45,17 @@ async function createRaidCard(uuid, playerName, raidCounts, totalRaids, days = n
     context.font = '25px WynnFont';
     context.fillText(`NOTG:`, 310, 170);
     context.fillText(`TCC:`, 310, 260);
-    context.fillText(`NOL:`, 500, 170);
-    context.fillText(`TNA:`, 500, 260);
+    context.fillText(`NOL:`, 430, 170);
+    context.fillText(`TNA:`, 430, 260);
+    context.fillText(`TWP:`, 550,170)
 
     context.shadowColor = '#544a00'
     context.fillStyle = '#fcdf00';
     context.fillText(`${raidCounts[0] ?? 0}`, 310, 215);
     context.fillText(`${raidCounts[2] ?? 0}`, 310, 305);
-    context.fillText(`${raidCounts[1] ?? 0}`, 500, 215);
-    context.fillText(`${raidCounts[3] ?? 0}`, 500, 305);
+    context.fillText(`${raidCounts[1] ?? 0}`, 430, 215);
+    context.fillText(`${raidCounts[3] ?? 0}`, 430, 305);
+    context.fillText(`${raidCounts[4 ?? 0]}`, 550, 215);
     return canvas.toBuffer('image/png');
 }
 
