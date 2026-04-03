@@ -1040,6 +1040,25 @@ async function getPlayerByDiscordId(discordId) {
     }
 }
 
+async function getPlayerByUUID(uuid) {
+    try {
+        const connection = await pool.getConnection();
+
+        const query = `
+            SELECT * FROM players
+            WHERE uuid = ?;
+        `;
+
+        const [rows] = await connection.execute(query, [uuid]);
+        connection.release();
+
+        return rows[0] || null;
+    } catch (err) {
+        console.error("Error getting player by UUID: ", err);
+        return null;
+    }
+}
+
 // Tracker-related functions
 
 async function setTrackerEnabled(channelId, trackerType, enabled) {
@@ -1159,5 +1178,5 @@ async function databaseInit() {
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
-    createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
+    createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId, getPlayerByUUID,
     setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState };

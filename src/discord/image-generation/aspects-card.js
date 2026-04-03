@@ -8,7 +8,7 @@ Canvas.GlobalFonts.registerFromPath(
     'WynnFont'
 );
 
-async function createAspectsCard(uuid, playerName, totalRaids, aspectsGiven, owedAspects) {
+async function createAspectsCard(uuid, playerName, totalRaids, aspectsGiven, owedAspects, needsAspects = true) {
     const canvas = Canvas.createCanvas(700, 350);
     const context = canvas.getContext('2d');
 
@@ -53,6 +53,14 @@ async function createAspectsCard(uuid, playerName, totalRaids, aspectsGiven, owe
         context.fillStyle = '#ff5555';
     }
     context.fillText(`${owedAspects}`, 460, 310);
+
+    // Display aspects toggle status
+    context.font = '18px WynnFont';
+    context.shadowColor = '#363636';
+    const statusText = needsAspects ? 'Accepting Aspects' : 'Aspects Toggled Off';
+    const statusColor = needsAspects ? '#55ff55' : '#ff5555';
+    context.fillStyle = statusColor;
+    context.fillText(statusText, 310, 155);
 
     return canvas.toBuffer('image/png');
 }
