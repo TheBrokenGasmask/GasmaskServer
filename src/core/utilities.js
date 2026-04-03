@@ -5,14 +5,16 @@ const raids = [
   { name: "Nest of the Grootslangs", id: 0 },
   { name: "Orphion's Nexus of Light", id: 1 },
   { name: "The Canyon Colossus", id: 2 },
-  { name: "The Nameless Anomaly", id: 3 }
+  { name: "The Nameless Anomaly", id: 3 },
+  { name: "The Wartorn Palace", id: 4 }
 ]
 
 const raidsAbbr = [
   { name: "NOTG", id: 0 },
   { name: "NOL", id: 1 },
   { name: "TCC", id: 2 },
-  { name: "TNA", id: 3 }
+  { name: "TNA", id: 3 },
+  {name: "TWP", id: 4}
 ]
 
 const mapping = {
