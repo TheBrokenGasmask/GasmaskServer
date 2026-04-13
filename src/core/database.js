@@ -7,22 +7,7 @@ const {requestUsername} = require("./utilities");
 
 let pool;
 
-/*
-function databaseInit() {
 
-    pool = mysql.createPool({
-        host: config.get("sql.host"),
-        user: config.get("sql.user"),
-        password: config.get("sql.password"),
-        database: config.get("sql.database"),
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0,
-        timezone: 'Z' // Force UTC timezone
-    });
-
-    createTables();
-}*/
 
 async function createTables() {
     try {
@@ -190,6 +175,15 @@ async function createTables() {
         `;
         await connection.execute(createTrackerChannelConfigTableQuery);
 
+        const createMessageTrackerTableQuery = `
+            CREATE TABLE IF NOT EXISTS trackers (
+         channel_id  VARCHAR(20)  NOT NULL,
+         type        VARCHAR(20)  NOT NULL,
+         message_id  VARCHAR(20)  NOT NULL,
+         PRIMARY KEY (channel_id, type)
+        );`;
+        await connection.execute(createMessageTrackerTableQuery);
+        
         connection.release();
     } catch (err) {
         console.error("Error creating table: ", err);
@@ -1134,6 +1128,38 @@ async function getTrackerState(channelId, trackerType) {
         return false;
     }
 }
+async function saveTrackerMessage(channelId, type, messageId) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            INSERT INTO trackers (channel_id, type, message_id)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE message_id = ?;
+        `;
+        await connection.execute(query, [channelId, type, messageId, messageId]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error("Error saving tracker message: ", err);
+        return false;
+    }
+}
+
+async function getTrackerMessage(channelId, type) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            SELECT message_id FROM trackers
+            WHERE channel_id = ? AND type = ?;
+        `;
+        const [rows] = await connection.execute(query, [channelId, type]);
+        connection.release();
+        return rows.length > 0 ? rows[0].message_id : null;
+    } catch (err) {
+        console.error("Error fetching tracker message: ", err);
+        return null;
+    }
+}
 
 async function databaseInit() {
     const host = config.get("sql.host");
@@ -1160,4 +1186,4 @@ async function databaseInit() {
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
-    setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState };
+    setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage};

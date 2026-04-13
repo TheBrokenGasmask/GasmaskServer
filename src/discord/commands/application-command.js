@@ -1,72 +1,59 @@
-const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
-const { setTrackerEnabled, getApplicationState } = require("../../core/database");
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { saveTrackerMessage, getTrackerMessage } = require("../../core/database");
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('joinapplication')
-        .setDescription('Create a application to join the guild')
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('join')
-                .setDescription('Create a application to join the guild'))
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('rank')
-                .setDescription('Create a application to apply for a rank promotion')),
+        .setName('application')
+        .setDescription('Manage application trackers')
+        .addSubcommand(sub =>
+            sub.setName('join').setDescription('Post a join application tracker'))
+        .addSubcommand(sub =>
+            sub.setName('rank').setDescription('Post a rank promotion tracker')),
+
     async execute(interaction) {
         const subcommand = interaction.options.getSubcommand();
         const channelId = interaction.channelId;
 
-        // Check if user has required permissions
         if (!interaction.member.permissions.has('MANAGE_CHANNELS')) {
-            const noPermissionEmbed = new EmbedBuilder()
-                .setColor(0xFF4444)
-                .setTitle('❌ Permission Denied')
-                .setDescription('You need the "Manage Channels" permission to use this command.')
-                .setTimestamp();
-            
-            await interaction.reply({ embeds: [noPermissionEmbed], ephemeral: true });
-            return;
+            return interaction.reply({
+                content: '❌ You need **Manage Channels** permission.',
+                ephemeral: true
+            });
         }
 
-        try { 
-            const currentState = await getApplicationState(channelId, subcommand);
-            const newState = !currentState;
-            
-            await setTrackerEnabled(channelId, subcommand, newState);
-            
-            const statusText = newState ? '✅ Enabled' : '❌ Disabled';
-            const trackerName = subcommand === 'territory' ? 'Territory Tracker' : 'Guild Member Tracker';
-            
-            const embed = new EmbedBuilder()
-                .setColor(newState ? 0x00AA00 : 0xAA0000)
-                .setTitle(`${trackerName} ${statusText}`)
-                .setDescription(`${trackerName} is now **${newState ? 'enabled' : 'disabled'}** in this channel.`)
-                .addFields(
-                    { name: 'Tracker Type', value: subcommand.charAt(0).toUpperCase() + subcommand.slice(1), inline: true },
-                    { name: 'Status', value: newState ? '✅ Active' : '❌ Inactive', inline: true },
-                    { 
-                        name: 'Updates', 
-                        value: subcommand === 'territory' 
-                            ? 'You will receive notifications about territory gains and losses.' 
-                            : 'You will receive notifications about guild member joins, leaves, and rank changes.', 
-                        inline: false 
-                    }
-                )
-                .setFooter({ text: 'Tracker System' })
-                .setTimestamp();
-            
-            await interaction.reply({ embeds: [embed], ephemeral: false });
-        } catch (error) {
-            console.error('Error executing application command:', error);
-            
-            const errorEmbed = new EmbedBuilder()
-                .setColor(0xFF4444)
-                .setTitle('❌ Error')
-                .setDescription('An error occurred while processing your request.')
-                .setTimestamp();
-            
-            await interaction.reply({ embeds: [errorEmbed], ephemeral: true });
+        // Prevent duplicate trackers in the same channel
+        const existing = await getTrackerMessage(channelId, subcommand);
+        if (existing) {
+            return interaction.reply({
+                content: `⚠️ A **${subcommand}** tracker already exists in this channel.`,
+                ephemeral: true
+            });
         }
+
+        const embed = new EmbedBuilder()
+            .setColor(0xAA0000)
+            .setTitle(`📋 TBGM — ${subcommand === 'join' ? 'Guild Application' : 'Rank Promotion'}`)
+            .setDescription(
+                subcommand === 'join'
+                    ? 'Want to join the guild? Click the button below to open an application ticket.'
+                    : 'Ready for a rank promotion? Click the button below to start your application.'
+            )
+            .setFooter({ text: 'TBGM Application System' })
+            .setTimestamp();
+
+        // Button with a custom_id that encodes the type
+        const button = new ButtonBuilder()
+            .setCustomId(`open_application:${subcommand}`)
+            .setLabel(subcommand === 'join' ? '📩 Apply to Join' : '⬆️ Apply for Promotion')
+            .setStyle(ButtonStyle.Danger);
+
+        const row = new ActionRowBuilder().addComponents(button);
+
+        // Send the tracker message publicly
+        await interaction.reply({ embeds: [embed], components: [row] });
+
+        // Fetch the reply so we have the message ID to store
+        const sent = await interaction.fetchReply();
+        await saveTrackerMessage(channelId, subcommand, sent.id);
     }
 };

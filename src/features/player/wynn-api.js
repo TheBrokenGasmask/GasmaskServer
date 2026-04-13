@@ -193,6 +193,49 @@ function getTerritoryList() {
     });
 }
 
+function getWynnUserFull(ign) {
+    return new Promise((resolve, reject) => {
+        const makeRequest = (retries = 3) => {
+            const token = config.get("wynncraft-token");
+            const url = `https://api.wynncraft.com/v3/player/${ign}?fullResult`;
+            console.log(`[WynnAPI] Fetching: ${url}`);
+            console.log(`[WynnAPI] Token present: ${!!token}`);
 
+            const options = {
+                method: 'GET',
+                url,
+                // Only include auth header if token is actually set
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                timeout: 10000,
+                json: true,
+                forever: false,
+                pool: { maxSockets: 100 }
+            };
 
-module.exports = {getGuildRank, isPlayerInGuild, getPlayerGuild, getPlayerGuildInfo, getWynnGuild, getWynnGuild, getWynnUser, getTerritoryList};
+            request(options, function (error, response, body) {
+                if (error) {
+                    console.error('[WynnAPI] Network error:', error.message);
+                    if (retries > 0 && (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT')) {
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+                    return reject(new Error(`WynnAPI network error: ${error.message}`));
+                }
+
+                console.log(`[WynnAPI] Status: ${response.statusCode}`);
+                console.log(`[WynnAPI] Body:`, JSON.stringify(body, null, 2));
+
+                if (response.statusCode !== 200) {
+                    if (retries > 0 && response.statusCode >= 500) {
+                        return setTimeout(() => makeRequest(retries - 1), 1000);
+                    }
+                    return reject(new Error(`WynnAPI request failed: Status ${response.statusCode}`));
+                }
+
+                resolve(body);
+            });
+        };
+        makeRequest();
+    });
+}
+
+module.exports = { getGuildRank, isPlayerInGuild, getPlayerGuild, getPlayerGuildInfo, getWynnGuild, getWynnUser, getWynnUserFull, getTerritoryList };

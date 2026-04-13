@@ -6,6 +6,7 @@ const { chatBridge } = require('../features/chat-bridge/chat-bridge-service');
 const { rankService } = require('../features/ranks/rank-service');
 const { initializeTerritoryTracker } = require('../features/trackers/territory-tracker');
 const { initializeGuildMemberTracker } = require('../features/trackers/guild-tracker');
+const { handleApplicationButton, handleCloseApplication } = require('../features/applications/application');
 require('./deploy-commands');
 
 const client = new Client({ 
@@ -14,6 +15,39 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent
     ] 
+});
+
+client.on(Events.InteractionCreate, async interaction => {
+    if (interaction.isButton()) {
+        const [action, type] = interaction.customId.split(':');
+
+        if (action === 'open_application') {
+            await handleApplicationButton(interaction, type);
+        }
+
+        if (action === 'close_application') {
+            await handleCloseApplication(interaction);
+        }
+
+        return;
+    }
+
+    if (!interaction.isChatInputCommand()) return; // this was killing buttons before
+    const command = interaction.client.commands.get(interaction.commandName);
+    if (!command) {
+        console.error(`No command matching ${interaction.commandName} was found.`);
+        return;
+    }
+    try {
+        await command.execute(interaction);
+    } catch (error) {
+        console.error(error);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+        }
+    }
 });
 
 client.commands = new Collection();
@@ -91,4 +125,4 @@ client.on(Events.MessageCreate, async message => {
     await chatBridge.handleDiscordMessage(message.author, body, message.channel.id);
 });
 
-module.exports = { client };
+module.exports = { client, handleApplicationButton  };
