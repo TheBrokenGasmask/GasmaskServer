@@ -193,11 +193,11 @@ function getTerritoryList() {
     });
 }
 
-function getWynnUserFull(ign) {
+function getWynnUserFull(uuid) {
     return new Promise((resolve, reject) => {
         const makeRequest = (retries = 3) => {
             const token = config.get("wynncraft-token");
-            const url = `https://api.wynncraft.com/v3/player/${ign}?fullResult`;
+            const url = `https://api.wynncraft.com/v3/player/${uuid}?fullResult`;
             console.log(`[WynnAPI] Fetching: ${url}`);
             console.log(`[WynnAPI] Token present: ${!!token}`);
 
@@ -222,7 +222,7 @@ function getWynnUserFull(ign) {
                 }
 
                 console.log(`[WynnAPI] Status: ${response.statusCode}`);
-                console.log(`[WynnAPI] Body:`, JSON.stringify(body, null, 2));
+                //console.log(`[WynnAPI] Body:`, JSON.stringify(body, null, 2));
 
                 if (response.statusCode !== 200) {
                     if (retries > 0 && response.statusCode >= 500) {

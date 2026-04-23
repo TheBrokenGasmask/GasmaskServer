@@ -6,8 +6,7 @@ const { chatBridge } = require('../features/chat-bridge/chat-bridge-service');
 const { rankService } = require('../features/ranks/rank-service');
 const { initializeTerritoryTracker } = require('../features/trackers/territory-tracker');
 const { initializeGuildMemberTracker } = require('../features/trackers/guild-tracker');
-const { handleApplicationButton, handleCloseApplication } = require('../features/applications/application');
-require('./deploy-commands');
+const { handleApplicationButton, handleApplicationVote, handleCloseApplication } = require('../features/applications/application');require('./deploy-commands');
 
 const client = new Client({ 
     intents: [
@@ -26,8 +25,13 @@ client.on(Events.InteractionCreate, async interaction => {
         }
 
         if (action === 'close_application') {
-            await handleCloseApplication(interaction);
+            await handleCloseApplication(interaction, type);
         }
+        
+        if (action === 'vote_application')  {
+            await handleApplicationVote(interaction, type);
+        }
+
 
         return;
     }

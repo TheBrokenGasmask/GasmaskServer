@@ -184,6 +184,32 @@ async function createTables() {
         );`;
         await connection.execute(createMessageTrackerTableQuery);
         
+        const createApplicationTableQuery =`
+        CREATE TABLE IF NOT EXISTS applications (
+            id            INT AUTO_INCREMENT PRIMARY KEY,
+            thread_id     VARCHAR(20) NOT NULL,
+            vote_bar_message_id  VARCHAR(20),
+            review_message_id    VARCHAR(20),
+            applicant_id  VARCHAR(20) NOT NULL,
+            ign           VARCHAR(32) NOT NULL,
+            status        VARCHAR(20) DEFAULT 'pending',
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );`
+        await connection.execute(createApplicationTableQuery);
+        
+        const createApplicationVotesTableQuery =`
+        CREATE TABLE IF NOT EXISTS application_votes (
+            application_id  INT NOT NULL,
+            voter_id        VARCHAR(20) NOT NULL,
+            vote            VARCHAR(10) NOT NULL, -- 'accept' or 'decline'
+            PRIMARY KEY (application_id, voter_id),
+            FOREIGN KEY (application_id) REFERENCES applications(id)
+        );`
+        await connection.execute(createApplicationVotesTableQuery);
+
+
+
+
         connection.release();
     } catch (err) {
         console.error("Error creating table: ", err);
@@ -1161,6 +1187,132 @@ async function getTrackerMessage(channelId, type) {
     }
 }
 
+
+async function createApplication(threadId, applicantId, ign) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            INSERT INTO applications (thread_id, applicant_id, ign)
+            VALUES (?, ?, ?);
+        `;
+        const [result] = await connection.execute(query, [threadId, applicantId, ign]);
+        connection.release();
+        return result.insertId;
+    } catch (err) {
+        console.error('Error creating application:', err);
+        return null;
+    }
+}
+
+async function setApplicationMessageIds(applicationId, voteBarMessageId, reviewMessageId) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            UPDATE applications
+            SET vote_bar_message_id = ?, review_message_id = ?
+            WHERE id = ?;
+        `;
+        await connection.execute(query, [voteBarMessageId, reviewMessageId, applicationId]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error('Error setting application message ids:', err);
+        return false;
+    }
+}
+
+async function getApplicationByThread(threadId) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            SELECT * FROM applications WHERE thread_id = ? AND status = 'pending';
+        `;
+        const [rows] = await connection.execute(query, [threadId]);
+        connection.release();
+        return rows.length > 0 ? rows[0] : null;
+    } catch (err) {
+        console.error('Error fetching application:', err);
+        return null;
+    }
+}
+
+async function getApplicationById(applicationId) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `SELECT * FROM applications WHERE id = ?;`;
+        const [rows] = await connection.execute(query, [applicationId]);
+        connection.release();
+        return rows.length > 0 ? rows[0] : null;
+    } catch (err) {
+        console.error('Error fetching application by id:', err);
+        return null;
+    }
+}
+
+async function upsertVote(applicationId, voterId, vote) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            INSERT INTO application_votes (application_id, voter_id, vote)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE vote = ?;
+        `;
+        await connection.execute(query, [applicationId, voterId, vote, vote]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error('Error upserting vote:', err);
+        return false;
+    }
+}
+
+async function getVotes(applicationId) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            SELECT vote, COUNT(*) as count
+            FROM application_votes
+            WHERE application_id = ?
+            GROUP BY vote;
+        `;
+        const [rows] = await connection.execute(query, [applicationId]);
+        connection.release();
+        const accepts = rows.find(r => r.vote === 'accept')?.count ?? 0;
+        const declines = rows.find(r => r.vote === 'decline')?.count ?? 0;
+        return { accepts, declines };
+    } catch (err) {
+        console.error('Error fetching votes:', err);
+        return { accepts: 0, declines: 0 };
+    }
+}
+
+async function setApplicationStatus(applicationId, status) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `UPDATE applications SET status = ? WHERE id = ?;`;
+        await connection.execute(query, [status, applicationId]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error('Error setting application status:', err);
+        return false;
+    }
+}
+
+async function getApplicationByReviewMessage(messageId) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `SELECT * FROM applications WHERE review_message_id = ?;`;
+        const [rows] = await connection.execute(query, [messageId]);
+        connection.release();
+        return rows.length > 0 ? rows[0] : null;
+    } catch (err) {
+        console.error('Error fetching application by review message:', err);
+        return null;
+    }
+}
+
+
 async function databaseInit() {
     const host = config.get("sql.host");
     const user = config.get("sql.user");
@@ -1183,7 +1335,11 @@ async function databaseInit() {
     await createTables();
 }
 
+
+
+
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
-    setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage};
+    setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage, createApplication, setApplicationMessageIds, getApplicationByThread,
+    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage};
