@@ -28,7 +28,6 @@ function buildVoteBar(accepts, declines) {
 }
 
 function buildVoteBarEmbed(accepts, declines) {
-    const threshold = accepts >= REQUIRED_VOTES || declines >= REQUIRED_VOTES;
     const status = accepts >= REQUIRED_VOTES ? '✅ Accepted' : declines >= REQUIRED_VOTES ? '❌ Declined' : '⏳ Pending';
 
     return new EmbedBuilder()
@@ -71,7 +70,7 @@ while (!confirmed && !apiDown) {
     const ignCollected = await awaitAnswer(thread, member.id);
         if (ignCollected === null) return null;
     const currentIgn = ignCollected.trim();
-    ign = currentIgn; // set the main ign variable to the current attempt
+    let ign = currentIgn; // set the main ign variable to the current attempt
     answers[0] = { question: 'Wynncraft IGN', answer: currentIgn }; // always update the IGN answer
 
     await thread.send({
@@ -135,7 +134,6 @@ while (!confirmed && !apiDown) {
         playerData = null;
         // loop continues — asks for IGN again
     }
-highestLevel = getHighestClassLevel(playerData);
 
 if (highestLevel === 0) {
     await thread.send({
@@ -146,11 +144,12 @@ if (highestLevel === 0) {
         ]
     });
 
-    const levelCollected = await thread.awaitMessages({ filter: m => m.author.id === member.id, max: 1 });
-    const parsed = parseInt(levelCollected.first().content.trim());
-    highestLevel = isNaN(parsed) ? 0 : parsed;
-    answers.push({ question: 'Highest Class Level (self reported)', answer: `${highestLevel}` });
-}
+
+        const levelCollected = await awaitAnswer(thread, member.id);
+            if (answer === null) return null; // ticket was closed mid-question
+            aanswers.push({ question: 'Highest Class Level (self reported)', answer: `${highestLevel}` });
+        }
+
 
 }
 
@@ -164,11 +163,11 @@ if (apiDown) {
         ]
     });
 
-    const levelCollected = await thread.awaitMessages({ filter: m => m.author.id === member.id, max: 1 });
-    const parsed = parseInt(levelCollected.first().content.trim());
-    highestLevel = isNaN(parsed) ? 0 : parsed;
-    answers.push({ question: 'Highest Class Level (self reported)', answer: `${highestLevel}` });
-}
+    const levelCollected = await awaitAnswer(thread, member.id);
+            if (answer === null) return null; // ticket was closed mid-question
+            aanswers.push({ question: 'Highest Class Level (self reported)', answer: `${highestLevel}` });
+        }
+
 
 
     
@@ -260,10 +259,6 @@ async function handleApplicationButton(interaction, type) {
     const voteBarMsg = await ticketThread.send({
         embeds: [buildVoteBarEmbed(0, 0)]
     });
-
-    const alertConfig = config.get('alert-command');
-        const requiredRoleId = alertConfig['required-role-id'];
-
 
     // Build review channel summary
     const reviewChannelConfig = config.get('votesystem');

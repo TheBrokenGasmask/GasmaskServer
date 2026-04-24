@@ -198,8 +198,6 @@ function getWynnUserFull(uuid) {
         const makeRequest = (retries = 3) => {
             const token = config.get("wynncraft-token");
             const url = `https://api.wynncraft.com/v3/player/${uuid}?fullResult`;
-            console.log(`[WynnAPI] Fetching: ${url}`);
-            console.log(`[WynnAPI] Token present: ${!!token}`);
 
             const options = {
                 method: 'GET',
@@ -220,9 +218,6 @@ function getWynnUserFull(uuid) {
                     }
                     return reject(new Error(`WynnAPI network error: ${error.message}`));
                 }
-
-                console.log(`[WynnAPI] Status: ${response.statusCode}`);
-                //console.log(`[WynnAPI] Body:`, JSON.stringify(body, null, 2));
 
                 if (response.statusCode !== 200) {
                     if (retries > 0 && response.statusCode >= 500) {
