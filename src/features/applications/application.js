@@ -184,7 +184,7 @@ if (apiDown) {
         });
         return null;
     }
-    
+
     const dynamicQuestions = [
         ...(type === 'join' ?  
             ['what is your Age?',
@@ -193,7 +193,9 @@ if (apiDown) {
             'What is your reason for joining and how will you contribute to the guild?', 
             'Are you intrested in participating in guild raids? If so, rate from 1-10',
             'Are you intrested in participating in guild warring? If so, rate from 1-10',
-            'Accept our rules in #rules alwel as in https://imgur.com/a/cmWApkT'
+            'What languages do you speak?',
+            'Are there any things done by online people that may irritates you? (i.e pet peeve)',
+            'Accept our rules in #rules aswell as in https://imgur.com/a/cmWApkT'
             ]
                             : ['Why do you feel you deserve a promotion?', 'What are your recent achievements?']),
         ...(guildName ? [`We can see you are in **[${guildPrefix}] ${guildName}**. Why are you looking to leave?`] : []),
