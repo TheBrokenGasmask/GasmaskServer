@@ -108,7 +108,7 @@ module.exports = {
                     }
                 }
 
-                if (finalRankString.toLowerCase() !== 'recruit') {
+                if (finalRankString.toLowerCase()) {
                     processedMembers.push({
                         ...member,
                         rankString: finalRankString,
@@ -232,7 +232,7 @@ module.exports = {
             const totalLE = membersWithFinalPayouts.reduce((sum, member) => sum + member.totalLE, 0);
             
             const memberPayouts = membersWithFinalPayouts
-                .filter(member => member.totalLE >= 4)
+                .filter(member => mmember.raidCount >= 10)
                 .map(member => `${member.username} - ${member.totalLE}le`)
                 .join('\n');
 
