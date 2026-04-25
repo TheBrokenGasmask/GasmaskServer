@@ -30,7 +30,7 @@ module.exports = {
 
         playerName = await getPlayerUsername(uuid);
 
-        let raidCounts = [0, 0, 0, 0]
+        let raidCounts = [0, 0, 0, 0, 0]
         let raidsData = await getRaids(uuid, daysToTimestamp((days) ? days : -1));
         let totalRaids = 0
         for (let i = 0; i < raidsData.length; i++) {
