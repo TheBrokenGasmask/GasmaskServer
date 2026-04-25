@@ -1335,11 +1335,25 @@ async function databaseInit() {
     await createTables();
 }
 
-
+async function deleteTrackerMessage(channelId, type) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            DELETE FROM trackers
+            WHERE channel_id = ? AND type = ?;
+        `;
+        await connection.execute(query, [channelId, type]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error('Error deleting tracker message:', err);
+        return false;
+    }
+}
 
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
     setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage, createApplication, setApplicationMessageIds, getApplicationByThread,
-    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage};
+    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage};
