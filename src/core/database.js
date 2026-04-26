@@ -1064,6 +1064,25 @@ async function getPlayerByDiscordId(discordId) {
     }
 }
 
+async function getPlayerByUUID(uuid) {
+    try {
+        const connection = await pool.getConnection();
+
+        const query = `
+            SELECT * FROM players
+            WHERE uuid = ?;
+        `;
+
+        const [rows] = await connection.execute(query, [uuid]);
+        connection.release();
+
+        return rows[0] || null;
+    } catch (err) {
+        console.error("Error getting player by UUID: ", err);
+        return null;
+    }
+}
+
 // Tracker-related functions
 
 async function setTrackerEnabled(channelId, trackerType, enabled) {

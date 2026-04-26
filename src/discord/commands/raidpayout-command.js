@@ -232,7 +232,7 @@ module.exports = {
             const totalLE = membersWithFinalPayouts.reduce((sum, member) => sum + member.totalLE, 0);
             
             const memberPayouts = membersWithFinalPayouts
-                .filter(member => mmember.raidCount >= 10)
+                .filter(member => member.raidCount >= 10)
                 .map(member => `${member.username} - ${member.totalLE}le`)
                 .join('\n');
 
