@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, PermissionFlagsBits } = require("discord.js");
 const { saveTrackerMessage, getTrackerMessage, setTrackerEnabled, getApplicationState, deleteTrackerMessage } = require("../../core/database");
 
 module.exports = {
@@ -35,7 +35,7 @@ async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
     const channelId = interaction.channelId;
 
-    if (!interaction.member.permissions.has('MANAGE_CHANNELS')) {
+    if (!interaction.member.permissions.has(PermissionFlagsBits.ManageChannels)) {
         return interaction.reply({
             content: '❌ You need **Manage Channels** permission.',
             ephemeral: true
