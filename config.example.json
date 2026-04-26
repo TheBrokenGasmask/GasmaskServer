@@ -22,6 +22,10 @@
     "webhook-url": "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN",
     "channel-id": "YOUR_CHANNEL_ID"
   },
+    "votesystem":{
+    "required-votes": 3,
+    "review-channel-id": "CHANNEL_ID_FOR_VOTE_REVIEWS"
+  },
   "alert-command": {
     "required-role-id": "ROLE_ID_REQUIRED_FOR_ALERT_COMMAND"
   },

@@ -70,7 +70,7 @@ while (!confirmed && !apiDown) {
     const ignCollected = await awaitAnswer(thread, member.id);
         if (ignCollected === null) return null;
     const currentIgn = ignCollected.trim();
-    let ign = currentIgn; // set the main ign variable to the current attempt
+    ign = currentIgn; // set the main ign variable to the current attempt
     answers[0] = { question: 'Wynncraft IGN', answer: currentIgn }; // always update the IGN answer
 
     await thread.send({
@@ -195,8 +195,13 @@ if (apiDown) {
             'What languages do you speak?',
             'Are there any things done by online people that may irritates you? (i.e pet peeve)',
             'Accept our rules in #rules aswell as in https://imgur.com/a/cmWApkT'
+            ] : type === 'veteran' ? [
+            'What is your activity level like? (How often do you play?)',
+            'what was the reason you left the guild previously?',
+            'Accept our rules in #rules aswell as in [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)'
             ]
-                            : ['Why do you feel you deserve a promotion?', 'What are your recent achievements?']),
+            
+            : ['Why do you feel you deserve a promotion?', 'What are your recent achievements?']),
         ...(guildName ? [`We can see you are in **[${guildPrefix}] ${guildName}**. Why are you looking to leave?`] : []),
     
     ];
@@ -220,17 +225,20 @@ async function handleApplicationButton(interaction, type) {
     const member = interaction.member;
 
     await interaction.deferReply({ ephemeral: true });
+    
+    const threadPrefix = type === 'veteran' ? 'veteran-application' : 'application';
 
     const existingThread = guild.channels.cache.find(
-        c => c.name === `application-${member.user.username.toLowerCase()}` && c.isThread() && !c.archived
+    c => c.name === `${threadPrefix}-${member.user.username.toLowerCase()}` && c.isThread() && !c.archived
     );
 
     if (existingThread) {
         return interaction.editReply({ content: `❌ You already have an open ticket: ${existingThread}` });
     }
 
+
     const ticketThread = await interaction.channel.threads.create({
-        name: `application-${member.user.username.toLowerCase()}`,
+        name: `${threadPrefix}-${member.user.username.toLowerCase()}`,
         type: 12,
         invitable: false,
         reason: `Application ticket for ${member.user.username}`
