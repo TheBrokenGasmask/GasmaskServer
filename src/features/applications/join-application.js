@@ -613,7 +613,7 @@ async function restoreApplications(client) {
                         { name: 'Discord', value: `${member}`, inline: true },
                         { name: 'Highest Level', value: `${highestLevel}`, inline: true },
                         { name: 'Ticket', value: `${thread}`, inline: true },
-                        ...answers.map(a => ({ name: a.question, value: a.answer }))
+                        ...answers.map(a => ({ name: truncate(a.question, 256), value: truncate(a.answer) }))
                     )
                     .setTimestamp();
 
