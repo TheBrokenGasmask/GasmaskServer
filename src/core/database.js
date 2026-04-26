@@ -177,10 +177,10 @@ async function createTables() {
 
         const createMessageTrackerTableQuery = `
             CREATE TABLE IF NOT EXISTS trackers (
-         channel_id  VARCHAR(20)  NOT NULL,
-         type        VARCHAR(20)  NOT NULL,
-         message_id  VARCHAR(20)  NOT NULL,
-         PRIMARY KEY (channel_id, type)
+            channel_id  VARCHAR(20)  NOT NULL,
+            type        VARCHAR(20)  NOT NULL,
+            message_id  VARCHAR(20)  NOT NULL,
+            PRIMARY KEY (channel_id, type)
         );`;
         await connection.execute(createMessageTrackerTableQuery);
         
@@ -193,7 +193,11 @@ async function createTables() {
             applicant_id  VARCHAR(20) NOT NULL,
             ign           VARCHAR(32) NOT NULL,
             status        VARCHAR(20) DEFAULT 'pending',
-            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            type          VARCHAR(20) DEFAULT 'join',
+            answers JSON DEFAULT NULL,
+            stage VARCHAR(20) DEFAULT 'ign',
+            resume_data JSON DEFAULT NULL
         );`
         await connection.execute(createApplicationTableQuery);
         
@@ -1060,6 +1064,25 @@ async function getPlayerByDiscordId(discordId) {
     }
 }
 
+async function getPlayerByUUID(uuid) {
+    try {
+        const connection = await pool.getConnection();
+
+        const query = `
+            SELECT * FROM players
+            WHERE uuid = ?;
+        `;
+
+        const [rows] = await connection.execute(query, [uuid]);
+        connection.release();
+
+        return rows[0] || null;
+    } catch (err) {
+        console.error("Error getting player by UUID: ", err);
+        return null;
+    }
+}
+
 // Tracker-related functions
 
 async function setTrackerEnabled(channelId, trackerType, enabled) {
@@ -1188,14 +1211,14 @@ async function getTrackerMessage(channelId, type) {
 }
 
 
-async function createApplication(threadId, applicantId, ign) {
+async function createApplication(threadId, applicantId, ign, type) {
     try {
         const connection = await pool.getConnection();
         const query = `
-            INSERT INTO applications (thread_id, applicant_id, ign)
-            VALUES (?, ?, ?);
+            INSERT INTO applications (thread_id, applicant_id, ign, type)
+            VALUES (?, ?, ?, ?);
         `;
-        const [result] = await connection.execute(query, [threadId, applicantId, ign]);
+        const [result] = await connection.execute(query, [threadId, applicantId, ign, type]);
         connection.release();
         return result.insertId;
     } catch (err) {
@@ -1351,9 +1374,62 @@ async function deleteTrackerMessage(channelId, type) {
     }
 }
 
+async function getPendingApplications() {
+    try {
+        const connection = await pool.getConnection();
+        const query = `SELECT * FROM applications WHERE status = 'pending';`;
+        const [rows] = await connection.execute(query);
+        connection.release();
+        return rows;
+    } catch (err) {
+        console.error('Error fetching pending applications:', err);
+        return [];
+    }
+}
+
+async function updateApplicationIgn(applicationId, ign) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `UPDATE applications SET ign = ? WHERE id = ?;`;
+        await connection.execute(query, [ign, applicationId]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error('Error updating application IGN:', err);
+        return false;
+    }
+}
+
+async function saveApplicationAnswers(applicationId, answers, stage) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `
+            UPDATE applications SET answers = ?, stage = ? WHERE id = ?;
+        `;
+        await connection.execute(query, [JSON.stringify(answers), stage, applicationId]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error('Error saving application answers:', err);
+        return false;
+    }
+}
+
+async function saveApplicationResumeData(applicationId, data) {
+    try {
+        const connection = await pool.getConnection();
+        const query = `UPDATE applications SET resume_data = ? WHERE id = ?;`;
+        await connection.execute(query, [JSON.stringify(data), applicationId]);
+        connection.release();
+        return true;
+    } catch (err) {
+        console.error('Error saving resume data:', err);
+        return false;
+    }
+}
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
     setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage, createApplication, setApplicationMessageIds, getApplicationByThread,
-    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage};
+    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData, updateApplicationIgn };

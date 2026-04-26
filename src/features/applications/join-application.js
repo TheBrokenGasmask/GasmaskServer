@@ -1,6 +1,6 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { PermissionFlagsBits, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const { getWynnUserFull } = require('../player/wynn-api');
-const {createApplication, setApplicationMessageIds, getApplicationByThread, getApplicationById, getApplicationByReviewMessage, upsertVote, getVotes, setApplicationStatus } = require('../../core/database');;
+const {createApplication, setApplicationMessageIds, getApplicationByThread, getApplicationById, getApplicationByReviewMessage, upsertVote, getVotes, setApplicationStatus, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData,updateApplicationIgn } = require('../../core/database');;
 const { config } = require('../../core/config');
 const { requestUUID } = require('../../core/utilities');
 
@@ -46,133 +46,208 @@ async function awaitAnswer(thread, memberId) {
     return collected.first()?.content ?? null;
 }
 
-// --- Q&A ---
-
-async function runApplicationQuestions(thread, member, type) {
-    const answers = [];
-
-    
-    
-    let guildName = null;
-    let guildPrefix = null; 
-    
-let highestLevel = 0;
-let apiDown = false;
-let playerData = null;
-let confirmed = false;
-
-while (!confirmed && !apiDown) {
-    // Ask for IGN
-    await thread.send({
-        embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription('❓ What is your Wynncraft IGN?')]
-    });
-
-    const ignCollected = await awaitAnswer(thread, member.id);
-        if (ignCollected === null) return null;
-    const currentIgn = ignCollected.trim();
-    ign = currentIgn; // set the main ign variable to the current attempt
-    answers[0] = { question: 'Wynncraft IGN', answer: currentIgn }; // always update the IGN answer
-
-    await thread.send({
-        embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription(`🔍 Looking up **${currentIgn}**...`)]
-    });
-
-    const mojang = await requestUUID(currentIgn);
-
-    if (!mojang) {
-        await thread.send({
-            embeds: [new EmbedBuilder()
-                .setColor(0xFF4444)
-                .setDescription(`❌ No Minecraft account found for **${currentIgn}**. Please double check and try again.`)
-            ]
-        });
-        continue; // loop back and ask for IGN again
-    }
-
-    try {
-        playerData = await getWynnUserFull(mojang.uuid);
-    } catch (err) {
-        console.error('[WynnAPI] Failed:', err);
-        apiDown = true;
-        break;
-    }
-
-    // Ask for confirmation
-    const guildInfo = getGuildInfo(playerData);
-    guildName = guildInfo.name;
-    guildPrefix = guildInfo.prefix;
-    highestLevel = getHighestClassLevel(playerData);
-    console.log(`Fetched player data for ${currentIgn}: Level ${highestLevel}, Guild: ${guildName ? `[${guildPrefix}] ${guildName}` : 'None'}`);
-    const confirmMsg = await thread.send({
-        embeds: [new EmbedBuilder()
-            .setColor(0xAA0000)
-            .setTitle('Is this your account?')
-            .addFields(
-                { name: 'IGN', value: currentIgn, inline: true },
-                { name: 'Highest Level', value: highestLevel > 0 ? `${highestLevel}` : 'Unknown', inline: true },
-                { name: 'Guild', value: guildName ? `[${guildPrefix}] ${guildName}` : 'None', inline: true },
-            )
-        ],
-        components: [new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('confirm_ign:yes').setLabel('✅ Yes, that\'s me').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('confirm_ign:no').setLabel('❌ No, wrong account').setStyle(ButtonStyle.Danger)
-        )]
-    });
-
-    const confirmCollected = await thread.awaitMessageComponent({
-        filter: i => i.user.id === member.id && i.customId.startsWith('confirm_ign:'),
-        time: 0
-    }).catch(() => null);
-
-    await confirmMsg.edit({ components: [] });
-
-    if (confirmCollected?.customId === 'confirm_ign:yes') {
-        await confirmCollected.reply({ content: '✅ Account confirmed, continuing...', ephemeral: true });
-        confirmed = true;
-    } else {
-        await confirmCollected?.reply({ content: '❌ No problem, let\'s try a different IGN.', ephemeral: true });
-        playerData = null;
-        // loop continues — asks for IGN again
-    }
-
-if (highestLevel === 0) {
+async function askForLevelManually(thread, member, answers, reason) {
     await thread.send({
         embeds: [new EmbedBuilder()
             .setColor(0xFFAA00)
-            .setTitle('⚠️ Could not read levels')
-            .setDescription('We weren\'t able to read your character levels. What is your highest class level?')
+            .setTitle(reason === 'api_down' ? '⚠️ API Unavailable' : '⚠️ Could not read levels')
+            .setDescription('What is your highest class level?')
         ]
     });
 
+    const answer = await awaitAnswer(thread, member.id);
+    if (answer === null) return null;
 
-        const levelCollected = await awaitAnswer(thread, member.id);
-            if (answer === null) return null; // ticket was closed mid-question
-            aanswers.push({ question: 'Highest Class Level (self reported)', answer: `${highestLevel}` });
-        }
-
-
+    const parsed = parseInt(answer);
+    const level = isNaN(parsed) ? 0 : parsed;
+    answers.push({ question: 'Highest Class Level (self reported)', answer: `${level}` });
+    return level;
 }
 
-// Only reach here if API is down
-if (apiDown) {
-    await thread.send({
-        embeds: [new EmbedBuilder()
-            .setColor(0xFFAA00)
-            .setTitle('⚠️ API Unavailable')
-            .setDescription('We couldn\'t verify your account automatically. What is your highest class level?')
-        ]
-    });
+function truncate(str, max = 1024) {
+    if (!str) return 'No answer';
+    return str.length > max ? str.slice(0, 1021) + '...' : str;
+}
 
-    const levelCollected = await awaitAnswer(thread, member.id);
-            if (answer === null) return null; // ticket was closed mid-question
-            aanswers.push({ question: 'Highest Class Level (self reported)', answer: `${highestLevel}` });
+// --- Q&A ---
+
+async function runApplicationQuestions(thread, member, type, applicationId, resumeFrom = null) {
+    // Load existing answers if resuming, otherwise start fresh
+    console.log(`[QA] resumeFrom:`, JSON.stringify(resumeFrom, null, 2));
+    console.log(`[QA] answers from resume:`, resumeFrom?.answers);
+
+    const answers = resumeFrom?.answers ?? [{ question: 'Wynncraft IGN', answer: '' }];
+
+    let ign = resumeFrom?.ign ?? '';
+    let guildName = resumeFrom?.guildName ?? null;
+    let guildPrefix = resumeFrom?.guildPrefix ?? null;
+    let highestLevel = resumeFrom?.highestLevel ?? 0;
+    let apiDown = false;
+    let playerData = null;
+    let confirmed = false;
+    let firstQuestion = true;    
+    let ignAttempts = 0;
+    let MAX_IGN_ATTEMPTS = 3;
+    // Skip IGN verification if we already have it
+    if (resumeFrom?.ign && !resumeFrom?.confirmSent) {
+            // IGN confirmed AND confirm embed already answered — skip straight to questions
+            confirmed = true;
+            guildName = resumeFrom.guildName;
+            guildPrefix = resumeFrom.guildPrefix;
+            highestLevel = resumeFrom.highestLevel;
+        } else if (resumeFrom?.ign && resumeFrom?.confirmSent) {
+            // IGN looked up but confirm embed not yet answered — re-enter loop to wait for button
+            guildName = resumeFrom.guildName;
+            guildPrefix = resumeFrom.guildPrefix;
+            highestLevel = resumeFrom.highestLevel;
+            // confirmed stays false — loop runs, skips sending embed, waits for button
         }
 
+    const ignAlreadySent = resumeFrom?.ignQuestionSent ?? false;
+    const confirmAlreadySent = resumeFrom?.confirmSent ?? false;
 
 
-    
-  
-   
+    while (!confirmed && !apiDown && ignAttempts < MAX_IGN_ATTEMPTS) {
+        ignAttempts++;
+
+        const currentIgn = resumeFrom?.ign ?? null;
+        const ignAlreadySent = resumeFrom?.ignQuestionSent ?? false;
+
+        if (currentIgn) {
+            // IGN was confirmed before restart — skip straight to lookup
+            ign = currentIgn;
+            answers[0] = { question: 'Wynncraft IGN', answer: ign };
+            resumeFrom = null;
+        } else {
+            // Only send the question if it wasn't already sent before restart
+            if (!ignAlreadySent) {
+                await saveApplicationResumeData(applicationId, {
+                    ign: null, guildName: null, guildPrefix: null,
+                    highestLevel: 0, ignQuestionSent: true
+                });
+                await thread.send({
+                    embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription('❓ What is your Wynncraft IGN?')]
+                });
+            }
+
+            const ignAnswer = await awaitAnswer(thread, member.id);
+            if (ignAnswer === null) return null;
+
+            ign = ignAnswer.trim();
+            answers[0] = { question: 'Wynncraft IGN', answer: ign };
+            await saveApplicationAnswers(applicationId, answers, 'ign');
+            resumeFrom = null;
+
+            await thread.send({
+                embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription(`🔍 Looking up **${ign}**...`)]
+            });
+        }
+
+        const mojang = await requestUUID(ign);
+        if (!mojang) {
+            await thread.send({
+                embeds: [new EmbedBuilder().setColor(0xFF4444).setDescription(`❌ No Minecraft account found for **${ign}**. Please double check and try again.`)]
+            });
+            continue;
+        }
+
+        let wynnNotFound = false;
+        try {
+            playerData = await getWynnUserFull(mojang.uuid);
+        } catch (err) {
+            if (err.type === 'NOT_FOUND') {
+                wynnNotFound = true;
+            } else {
+                console.error('[WynnAPI] Failed:', err);
+                apiDown = true;
+                break;
+            }
+        }
+
+        if (wynnNotFound) {
+            if (ignAttempts >= MAX_IGN_ATTEMPTS) {
+                await thread.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor(0xFFAA00)
+                        .setTitle('⚠️ Could not verify account')
+                        .setDescription('We were unable to find your Wynncraft account after 3 attempts. We\'ll ask for your level manually instead.')
+                    ]
+                });
+                break;
+            }
+            await thread.send({
+                embeds: [new EmbedBuilder()
+                    .setColor(0xFF4444)
+                    .setDescription(`❌ **${ign}** has never played Wynncraft. Please enter the correct IGN. (Attempt ${ignAttempts}/${MAX_IGN_ATTEMPTS})`)
+                ]
+            });
+            playerData = null;
+            continue;
+        }
+
+        const guildInfo = getGuildInfo(playerData);
+        guildName = guildInfo.name;
+        guildPrefix = guildInfo.prefix;
+        highestLevel = getHighestClassLevel(playerData);
+
+        await saveApplicationResumeData(applicationId, {
+            ign, guildName, guildPrefix, highestLevel,
+            confirmSent: true
+        });
+
+
+        const { wars, totalLevel, raids } = playerData.globalData;
+        const playtime = playerData.playtime;
+        let confirmMsg;
+            if (!confirmAlreadySent) {
+             confirmMsg = await thread.send({
+                embeds: [new EmbedBuilder()
+                    .setColor(0xAA0000)
+                    .setTitle('Is this your account?')
+                    .addFields(
+                        { name: 'IGN', value: ign, inline: true },
+                        { name: 'Highest Level', value: highestLevel > 0 ? `${highestLevel}` : 'Unknown', inline: true },
+                        { name: 'Total Levels', value: `${totalLevel}`, inline: true },
+                        { name: 'Guild', value: guildName ? `[${guildPrefix}] ${guildName}` : 'None', inline: true },
+                        { name: 'Wars', value: `${wars}`, inline: true },
+                        { name: 'Raids', value: `${raids.total}`, inline: true },
+                        { name: 'Playtime', value: `${Math.floor(playtime)}h`, inline: true },
+                    )
+                ],
+                components: [new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('confirm_ign:yes').setLabel('✅ Yes, that\'s me').setStyle(ButtonStyle.Success),
+                    new ButtonBuilder().setCustomId('confirm_ign:no').setLabel('❌ No, wrong account').setStyle(ButtonStyle.Danger)
+                )]
+            });
+        }
+        const confirmCollected = await thread.awaitMessageComponent({
+            filter: i => i.user.id === member.id && i.customId.startsWith('confirm_ign:'),
+            time: 0
+        }).catch(() => null);
+
+        if (confirmCollected?.customId === 'confirm_ign:yes') {
+            await confirmCollected.reply({ content: '✅ Account confirmed, continuing...', ephemeral: true });
+            confirmed = true;
+            await saveApplicationAnswers(applicationId, answers, 'questions');
+            await saveApplicationResumeData(applicationId, {
+                ign, guildName, guildPrefix, highestLevel
+            });
+        } else {
+            await confirmCollected?.reply({ content: '❌ No problem, let\'s try a different IGN.', ephemeral: true });
+            playerData = null;
+        }
+    }
+
+    if (apiDown) {
+        const manualLevel = await askForLevelManually(thread, member, answers, 'api_down');
+        if (manualLevel === null) return null;
+        highestLevel = manualLevel;
+    } else if (highestLevel === 0) {
+        const manualLevel = await askForLevelManually(thread, member, answers, 'unreadable');
+        if (manualLevel === null) return null;
+        highestLevel = manualLevel;
+    }
+
     if (highestLevel < MINIMUM_LEVEL) {
         await thread.send({
             embeds: [new EmbedBuilder()
@@ -185,57 +260,80 @@ if (apiDown) {
     }
 
     const dynamicQuestions = [
-        ...(type === 'join' ?  
-            ['what is your Age?',
+        ...(type === 'join' ? [
+            'What is your Age?',
             'What is your Timezone?',
             'What is your activity level like? (How often do you play?)',
-            'What is your reason for joining and how will you contribute to the guild?', 
-            'Are you intrested in participating in guild raids? If so, rate from 1-10',
-            'Are you intrested in participating in guild warring? If so, rate from 1-10',
+            'What is your reason for joining and how will you contribute to the guild?',
+            'Are you interested in participating in guild raids? If so, rate from 1-10',
+            'Are you interested in participating in guild warring? If so, rate from 1-10',
             'What languages do you speak?',
-            'Are there any things done by online people that may irritates you? (i.e pet peeve)',
-            'Accept our rules in #rules aswell as in https://imgur.com/a/cmWApkT'
-            ] : type === 'veteran' ? [
-            'What is your activity level like? (How often do you play?)',
-            'what was the reason you left the guild previously?',
-            'Accept our rules in #rules aswell as in [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)'
-            ]
-            
-            : ['Why do you feel you deserve a promotion?', 'What are your recent achievements?']),
+            'Are there any things done by online people that may irritate you? (i.e pet peeve)',
+            'Do you accept our general rules in https://discord.com/channels/983006019850469406/1211390009916264509 and our [guild rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
+        ] : type === 'veteran' ? [
+            'Why did you leave the guild?',
+            'Why do you want to return?',
+            'Do you accept our general rules in https://discord.com/channels/983006019850469406/1211390009916264509 and our [guild rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
+        ] : [
+            'Why do you feel you deserve a promotion?',
+            'What are your recent achievements?',
+        ]),
         ...(guildName ? [`We can see you are in **[${guildPrefix}] ${guildName}**. Why are you looking to leave?`] : []),
-    
     ];
 
-    for (const question of dynamicQuestions) {
-        await thread.send({
-            embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription(`❓ ${question}`)]
-        });
-        const answer = await awaitAnswer(thread, member.id);
-            if (answer === null) return null; // ticket was closed mid-question
-            answers.push({ question, answer });
-        }
+    // Figure out how many questions already answered so we can skip them
+    const alreadyAnswered = answers.filter(a => dynamicQuestions.includes(a.question)).length;
+    const remainingQuestions = dynamicQuestions.slice(alreadyAnswered);
 
+    const lastSentQuestion = resumeFrom?.lastSentQuestion ?? null;
+        console.log(`[QA] lastSentQuestion: ${lastSentQuestion}`);
+
+        // ... then in the loop:
+        for (const question of remainingQuestions) {
+            console.log(`[QA] Processing question: "${question}", firstQuestion: ${firstQuestion}, matches: ${lastSentQuestion === question}`);
+
+            await saveApplicationResumeData(applicationId, {
+                ign, guildName, guildPrefix, highestLevel,
+                lastSentQuestion: question
+            });
+
+            if (firstQuestion && lastSentQuestion === question) {
+                firstQuestion = false;
+                console.log(`[QA] Skipping send — already in chat`);
+            } else {
+                await thread.send({
+                    embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription(`❓ ${question}`)]
+                });
+                firstQuestion = false;
+            }
+
+        const answer = await awaitAnswer(thread, member.id);
+        if (answer === null) return null;
+
+        answers.push({ question, answer });
+        await saveApplicationAnswers(applicationId, answers, 'questions');
+    }
     return { answers, playerData, ign, highestLevel };
 }
 
 // --- Main button handler ---
 
 async function handleApplicationButton(interaction, type) {
+
     const guild = interaction.guild;
     const member = interaction.member;
 
     await interaction.deferReply({ ephemeral: true });
-    
+
     const threadPrefix = type === 'veteran' ? 'veteran-application' : 'application';
 
     const existingThread = guild.channels.cache.find(
-    c => c.name === `${threadPrefix}-${member.user.username.toLowerCase()}` && c.isThread() && !c.archived
+        c => c.name === `${threadPrefix}-${member.user.username.toLowerCase()}` && c.isThread() && !c.archived
     );
 
     if (existingThread) {
         return interaction.editReply({ content: `❌ You already have an open ticket: ${existingThread}` });
     }
-
 
     const ticketThread = await interaction.channel.threads.create({
         name: `${threadPrefix}-${member.user.username.toLowerCase()}`,
@@ -244,7 +342,21 @@ async function handleApplicationButton(interaction, type) {
         reason: `Application ticket for ${member.user.username}`
     });
 
+    const ticketAccessRoles = config.get('votesystem')['ticket-access-roles'] ?? [];
+    await interaction.guild.members.fetch();
+
     await ticketThread.members.add(member.id);
+
+    for (const roleId of ticketAccessRoles) {
+        const role = interaction.guild.roles.cache.get(roleId);
+        if (!role) continue;
+
+        // Add each member of that role to the thread
+        const membersWithRole = interaction.guild.members.cache.filter(m => m.roles.cache.has(roleId));
+        for (const [, roleMember] of membersWithRole) {
+            await ticketThread.members.add(roleMember.id).catch(console.error);
+        }
+    }
 
     const closeButton = new ButtonBuilder()
         .setCustomId(`close_application:${member.id}`)
@@ -258,21 +370,23 @@ async function handleApplicationButton(interaction, type) {
 
     await interaction.editReply({ content: `✅ Your ticket has been created: ${ticketThread}` });
 
-    const result = await runApplicationQuestions(ticketThread, member, type);
+    // ✅ Save to DB immediately — before Q&A starts
+    const applicationId = await createApplication(ticketThread.id, member.id, 'pending_ign', type);
+
+    const result = await runApplicationQuestions(ticketThread, member, type, applicationId);
     if (!result) return;
 
     const { answers, ign, highestLevel } = result;
 
-    // Post vote bar in ticket
-    const voteBarMsg = await ticketThread.send({
-        embeds: [buildVoteBarEmbed(0, 0)]
-    });
+    // Update IGN now that we have it
+    await updateApplicationIgn(applicationId, ign);
 
-    // Build review channel summary
+    const voteBarMsg = await ticketThread.send({ embeds: [buildVoteBarEmbed(0, 0)] });
+
     const reviewChannelConfig = config.get('votesystem');
-    const reviewChannel = guild.channels.cache.get(reviewChannelConfig[`review-channel-id`]);
+    const reviewChannel = guild.channels.cache.get(reviewChannelConfig['review-channel-id']);
     if (!reviewChannel) {
-        console.error('Review channel not found — check review-channel-id in config.json');
+        console.error('Review channel not found');
         return;
     }
 
@@ -283,30 +397,21 @@ async function handleApplicationButton(interaction, type) {
             { name: 'Discord', value: `${member}`, inline: true },
             { name: 'Highest Level', value: `${highestLevel}`, inline: true },
             { name: 'Ticket', value: `${ticketThread}`, inline: true },
-            ...answers.map(a => ({ name: a.question, value: a.answer }))
+            ...answers.map(a => ({ name: truncate(a.question, 256), value: truncate(a.answer) }))
         )
         .setTimestamp();
 
-    const acceptButton = new ButtonBuilder()
-        .setCustomId(`vote_application:accept`)
-        .setLabel('✅ Accept')
-        .setStyle(ButtonStyle.Success);
-
-    const declineButton = new ButtonBuilder()
-        .setCustomId(`vote_application:decline`)
-        .setLabel('❌ Decline')
-        .setStyle(ButtonStyle.Danger);
-
     const reviewMsg = await reviewChannel.send({
         embeds: [summaryEmbed],
-        components: [new ActionRowBuilder().addComponents(acceptButton, declineButton)]
+        components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('vote_application:accept').setLabel('✅ Accept').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('vote_application:decline').setLabel('❌ Decline').setStyle(ButtonStyle.Danger)
+        )]
     });
 
-    // Save to DB
-    const applicationId = await createApplication(ticketThread.id, member.id, ign);
     await setApplicationMessageIds(applicationId, voteBarMsg.id, reviewMsg.id);
 
-    // Auto archive after 24 hours if still pending
+    // Auto archive after 24 hours
     setTimeout(async () => {
         const app = await getApplicationById(applicationId);
         if (app?.status === 'pending') {
@@ -328,7 +433,7 @@ async function handleApplicationButton(interaction, type) {
 async function handleApplicationVote(interaction, voteType) {
     const member = interaction.member;
 
-    if (!member.permissions.has('MANAGE_THREADS')) {
+    if (!member.permissions.has(PermissionFlagsBits.ManageThreads)) {
         return interaction.reply({ content: '❌ You do not have permission to vote.', ephemeral: true });
     }
 
@@ -391,7 +496,7 @@ async function handleCloseApplication(interaction) {
     const member = interaction.member;
 
     const isTicketOwner = thread.name.endsWith(member.user.username.toLowerCase());
-    const isStaff = member.permissions.has('MANAGE_THREADS');
+    const isStaff = member.permissions.has(PermissionFlagsBits.ManageThreads);
 
     if (!isTicketOwner && !isStaff) {
         return interaction.reply({ content: '❌ You do not have permission to close this ticket.', ephemeral: true });
@@ -411,4 +516,122 @@ async function handleCloseApplication(interaction) {
     }, 5000);
 }
 
-module.exports = { handleApplicationButton, handleApplicationVote, handleCloseApplication };
+async function restoreApplications(client) {
+    const pending = await getPendingApplications();
+    console.log(`[Restore] Found ${pending.length} pending applications`);
+    if (pending.length === 0) return;
+
+    for (const app of pending) {  // ✅ app is defined here
+        console.log(`[Restore] Processing app ID ${app.id}, thread ${app.thread_id}`);
+
+        const savedAnswers = app.answers ?? null;
+        const savedIgn = savedAnswers?.find(a => a.question === 'Wynncraft IGN')?.answer ?? null;
+
+        const resumeFrom = app.resume_data ? {
+            ...app.resume_data,
+            answers: savedAnswers,
+        } : savedIgn ? {
+            ign: null,
+            answers: savedAnswers,
+            guildName: null,
+            guildPrefix: null,
+            highestLevel: 0,
+            lastSentQuestion: null,
+        } : null;
+
+        let thread;
+        try {
+            thread = await client.channels.fetch(app.thread_id);
+        } catch (err) {
+            console.log(`[Restore] Thread fetch failed: ${err.message}`);
+            await setApplicationStatus(app.id, 'expired');
+            continue;
+        }
+
+        if (!thread || thread.archived) {
+            await setApplicationStatus(app.id, 'expired');
+            continue;
+        }
+
+        let member;
+        try {
+            member = await thread.guild.members.fetch(app.applicant_id);
+        } catch (err) {
+            console.log(`[Restore] Member fetch failed: ${err.message}`);
+            await setApplicationStatus(app.id, 'expired');
+            continue;
+        }
+
+
+
+        // Reschedule auto-archive
+        const createdAt = new Date(app.created_at).getTime();
+        const remaining = (createdAt + 24 * 60 * 60 * 1000) - Date.now();
+
+        if (remaining <= 0) {
+            await setApplicationStatus(app.id, 'expired');
+            await thread.send({
+                embeds: [new EmbedBuilder()
+                    .setColor(0x888888)
+                    .setTitle('🕐 Ticket Expired')
+                    .setDescription('This ticket has been automatically archived.')
+                ]
+            });
+            await thread.setArchived(true).catch(console.error);
+            continue;
+        }
+
+        setTimeout(async () => {
+            const current = await getApplicationById(app.id);
+            if (current?.status === 'pending') {
+                await setApplicationStatus(app.id, 'expired');
+                await thread.send({
+                    embeds: [new EmbedBuilder()
+                        .setColor(0x888888)
+                        .setTitle('🕐 Ticket Expired')
+                        .setDescription('This ticket has been automatically archived after 24 hours.')
+                    ]
+                });
+                await thread.setArchived(true).catch(console.error);
+            }
+        }, remaining);
+
+        try {
+            const result = await runApplicationQuestions(thread, member, app.type ?? 'join', app.id, resumeFrom);
+            if (!result) continue;
+
+            const { answers, ign, highestLevel } = result;
+
+            const reviewChannelConfig = config.get('votesystem');
+            const reviewChannel = thread.guild.channels.cache.get(reviewChannelConfig['review-channel-id']);
+
+            if (reviewChannel) {
+                const summaryEmbed = new EmbedBuilder()
+                    .setColor(0xAA0000)
+                    .setTitle(`📋 New Application — ${ign}`)
+                    .addFields(
+                        { name: 'Discord', value: `${member}`, inline: true },
+                        { name: 'Highest Level', value: `${highestLevel}`, inline: true },
+                        { name: 'Ticket', value: `${thread}`, inline: true },
+                        ...answers.map(a => ({ name: a.question, value: a.answer }))
+                    )
+                    .setTimestamp();
+
+                const reviewMsg = await reviewChannel.send({
+                    embeds: [summaryEmbed],
+                    components: [new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('vote_application:accept').setLabel('✅ Accept').setStyle(ButtonStyle.Success),
+                        new ButtonBuilder().setCustomId('vote_application:decline').setLabel('❌ Decline').setStyle(ButtonStyle.Danger)
+                    )]
+                });
+
+                const voteBarMsg = await thread.send({ embeds: [buildVoteBarEmbed(0, 0)] });
+                await setApplicationMessageIds(app.id, voteBarMsg.id, reviewMsg.id);
+            }
+        } catch (err) {
+            console.error(`[Restore] Error restoring application ${app.id}:`, err);
+        }
+    }
+}
+
+module.exports = { handleApplicationButton, handleApplicationVote, handleCloseApplication, restoreApplications };

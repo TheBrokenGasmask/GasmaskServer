@@ -121,6 +121,8 @@ async function getPlayerGuild(uuid) {
 }
 
 async function getPlayerGuildInfo(uuid) {
+    console.log(`[getPlayerGuildInfo] Called for ${uuid}`);
+    console.trace(); // ✅ prints the full call stack
     try {
         let player = await getWynnUser(uuid);
         if (!player.guild || player.guild === "NULL") return { guild: null, guildRank: null };
@@ -212,18 +214,28 @@ function getWynnUserFull(uuid) {
 
             request(options, function (error, response, body) {
                 if (error) {
-                    console.error('[WynnAPI] Network error:', error.message);
                     if (retries > 0 && (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT')) {
                         return setTimeout(() => makeRequest(retries - 1), 1000);
                     }
                     return reject(new Error(`WynnAPI network error: ${error.message}`));
                 }
 
-                if (response.statusCode !== 200) {
-                    if (retries > 0 && response.statusCode >= 500) {
+                // ✅ 404 check must come BEFORE the generic statusCode !== 200 check
+                if (response.statusCode === 404) {
+                    const err = new Error(`Player not found on Wynncraft: ${uuid}`);
+                    err.type = 'NOT_FOUND';
+                    return reject(err);
+                }
+
+                if (response.statusCode >= 500) {
+                    if (retries > 0) {
                         return setTimeout(() => makeRequest(retries - 1), 1000);
                     }
-                    return reject(new Error(`WynnAPI request failed: Status ${response.statusCode}`));
+                    return reject(new Error(`WynnAPI server error: ${response.statusCode}`));
+                }
+
+                if (response.statusCode !== 200) {
+                    return reject(new Error(`WynnAPI unexpected status: ${response.statusCode}`));
                 }
 
                 resolve(body);
