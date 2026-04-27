@@ -6,14 +6,53 @@ const { chatBridge } = require('../features/chat-bridge/chat-bridge-service');
 const { rankService } = require('../features/ranks/rank-service');
 const { initializeTerritoryTracker } = require('../features/trackers/territory-tracker');
 const { initializeGuildMemberTracker } = require('../features/trackers/guild-tracker');
-require('./deploy-commands');
+const { handleApplicationButton, handleApplicationVote, handleCloseApplication, restoreApplications } = require('../features/applications/join-application');require('./deploy-commands');
 
 const client = new Client({ 
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.MessageContent
     ] 
+});
+
+client.on(Events.InteractionCreate, async interaction => {
+    if (interaction.isButton()) {
+        const [action, type] = interaction.customId.split(':');
+
+        if (action === 'open_application') {
+            await handleApplicationButton(interaction, type);
+        }
+
+        if (action === 'close_application') {
+            await handleCloseApplication(interaction, type);
+        }
+        
+        if (action === 'vote_application')  {
+            await handleApplicationVote(interaction, type);
+        }
+
+
+        return;
+    }
+
+    if (!interaction.isChatInputCommand()) return; // this was killing buttons before
+    const command = interaction.client.commands.get(interaction.commandName);
+    if (!command) {
+        console.error(`No command matching ${interaction.commandName} was found.`);
+        return;
+    }
+    try {
+        await command.execute(interaction);
+    } catch (error) {
+        console.error(error);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({ content: 'There was an error while executing this command!', ephemeral: true });
+        } else {
+            await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+        }
+    }
 });
 
 client.commands = new Collection();
@@ -55,6 +94,7 @@ client.once('ready', () => {
     initializeTerritoryTracker(client);
     initializeGuildMemberTracker(client);
     console.log('Event trackers initialized');
+    setTimeout(() => restoreApplications(client), 5000);
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -91,4 +131,4 @@ client.on(Events.MessageCreate, async message => {
     await chatBridge.handleDiscordMessage(message.author, body, message.channel.id);
 });
 
-module.exports = { client };
+module.exports = { client, handleApplicationButton  };
