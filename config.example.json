@@ -25,7 +25,8 @@
     "votesystem":{
     "required-votes": 3,
     "review-channel-id": "CHANNEL_ID_FOR_VOTE_REVIEWS",
-    "ticket-access-roles": ["ROLE_ID_1", "ROLE_ID_2"]
+    "ticket-access-roles": ["ROLE_ID_1", "ROLE_ID_2"],
+    "required-level": 110
   },
   "alert-command": {
     "required-role-id": "ROLE_ID_REQUIRED_FOR_ALERT_COMMAND"
