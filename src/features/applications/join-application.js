@@ -4,9 +4,8 @@ const {createApplication, setApplicationMessageIds, getApplicationByThread, getA
 const { config } = require('../../core/config');
 const { requestUUID } = require('../../core/utilities');
 
-const MINIMUM_LEVEL = config.get('required-level') ?? 100;
-const REQUIRED_VOTES = config.get('required-votes') ?? 1;
-
+const MINIMUM_LEVEL = config.get('votesystem.required-level') ?? 100;
+const REQUIRED_VOTES = config.get('votesystem.required-votes') ?? 1;
 // --- Helpers ---
 
 function getHighestClassLevel(playerData) {
@@ -72,10 +71,6 @@ function truncate(str, max = 1024) {
 // --- Q&A ---
 
 async function runApplicationQuestions(thread, member, type, applicationId, resumeFrom = null) {
-    // Load existing answers if resuming, otherwise start fresh
-    console.log(`[QA] resumeFrom:`, JSON.stringify(resumeFrom, null, 2));
-    console.log(`[QA] answers from resume:`, resumeFrom?.answers);
-
     const answers = resumeFrom?.answers ?? [{ question: 'Wynncraft IGN', answer: '' }];
 
     let ign = resumeFrom?.ign ?? '';
@@ -85,41 +80,37 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
     let apiDown = false;
     let playerData = null;
     let confirmed = false;
-    let firstQuestion = true;    
+    let firstQuestion = true;
     let ignAttempts = 0;
-    let MAX_IGN_ATTEMPTS = 3;
-    // Skip IGN verification if we already have it
-    if (resumeFrom?.ign && !resumeFrom?.confirmSent) {
-            // IGN confirmed AND confirm embed already answered — skip straight to questions
-            confirmed = true;
-            guildName = resumeFrom.guildName;
-            guildPrefix = resumeFrom.guildPrefix;
-            highestLevel = resumeFrom.highestLevel;
-        } else if (resumeFrom?.ign && resumeFrom?.confirmSent) {
-            // IGN looked up but confirm embed not yet answered — re-enter loop to wait for button
-            guildName = resumeFrom.guildName;
-            guildPrefix = resumeFrom.guildPrefix;
-            highestLevel = resumeFrom.highestLevel;
-            // confirmed stays false — loop runs, skips sending embed, waits for button
-        }
+    const MAX_IGN_ATTEMPTS = 3;
 
+    // Extract all resume flags before anything can clear resumeFrom
     const ignAlreadySent = resumeFrom?.ignQuestionSent ?? false;
     const confirmAlreadySent = resumeFrom?.confirmSent ?? false;
+    const lastSentQuestion = resumeFrom?.lastSentQuestion ?? null;
 
+    // Skip IGN loop if already confirmed
+    if (resumeFrom?.ign && !resumeFrom?.confirmSent) {
+        confirmed = true;
+        guildName = resumeFrom.guildName;
+        guildPrefix = resumeFrom.guildPrefix;
+        highestLevel = resumeFrom.highestLevel;
+    } else if (resumeFrom?.ign && resumeFrom?.confirmSent) {
+        guildName = resumeFrom.guildName;
+        guildPrefix = resumeFrom.guildPrefix;
+        highestLevel = resumeFrom.highestLevel;
+    }
 
     while (!confirmed && !apiDown && ignAttempts < MAX_IGN_ATTEMPTS) {
         ignAttempts++;
 
         const currentIgn = resumeFrom?.ign ?? null;
-        const ignAlreadySent = resumeFrom?.ignQuestionSent ?? false;
 
         if (currentIgn) {
-            // IGN was confirmed before restart — skip straight to lookup
             ign = currentIgn;
             answers[0] = { question: 'Wynncraft IGN', answer: ign };
             resumeFrom = null;
         } else {
-            // Only send the question if it wasn't already sent before restart
             if (!ignAlreadySent) {
                 await saveApplicationResumeData(applicationId, {
                     ign: null, guildName: null, guildPrefix: null,
@@ -143,64 +134,67 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
             });
         }
 
-        const mojang = await requestUUID(ign);
-        if (!mojang) {
-            await thread.send({
-                embeds: [new EmbedBuilder().setColor(0xFF4444).setDescription(`❌ No Minecraft account found for **${ign}**. Please double check and try again.`)]
-            });
-            continue;
-        }
-
-        let wynnNotFound = false;
-        try {
-            playerData = await getWynnUserFull(mojang.uuid);
-        } catch (err) {
-            if (err.type === 'NOT_FOUND') {
-                wynnNotFound = true;
-            } else {
-                console.error('[WynnAPI] Failed:', err);
-                apiDown = true;
-                break;
+        // Skip API calls if confirm was already sent — all data is in resume_data
+        if (!confirmAlreadySent) {
+            const mojang = await requestUUID(ign);
+            if (!mojang) {
+                await thread.send({
+                    embeds: [new EmbedBuilder().setColor(0xFF4444).setDescription(`❌ No Minecraft account found for **${ign}**. Please double check and try again.`)]
+                });
+                continue;
             }
-        }
 
-        if (wynnNotFound) {
-            if (ignAttempts >= MAX_IGN_ATTEMPTS) {
+            let wynnNotFound = false;
+            try {
+                playerData = await getWynnUserFull(mojang.uuid);
+            } catch (err) {
+                if (err.type === 'NOT_FOUND') {
+                    wynnNotFound = true;
+                } else {
+                    console.error('[WynnAPI] Failed:', err);
+                    apiDown = true;
+                    break;
+                }
+            }
+
+            if (wynnNotFound) {
+                if (ignAttempts >= MAX_IGN_ATTEMPTS) {
+                    await thread.send({
+                        embeds: [new EmbedBuilder()
+                            .setColor(0xFFAA00)
+                            .setTitle('⚠️ Could not verify account')
+                            .setDescription('We were unable to find your Wynncraft account after 3 attempts. We\'ll ask for your level manually instead.')
+                        ]
+                    });
+                    break;
+                }
                 await thread.send({
                     embeds: [new EmbedBuilder()
-                        .setColor(0xFFAA00)
-                        .setTitle('⚠️ Could not verify account')
-                        .setDescription('We were unable to find your Wynncraft account after 3 attempts. We\'ll ask for your level manually instead.')
+                        .setColor(0xFF4444)
+                        .setDescription(`❌ **${ign}** has never played Wynncraft. Please enter the correct IGN. (Attempt ${ignAttempts}/${MAX_IGN_ATTEMPTS})`)
                     ]
                 });
-                break;
+                playerData = null;
+                continue;
             }
-            await thread.send({
-                embeds: [new EmbedBuilder()
-                    .setColor(0xFF4444)
-                    .setDescription(`❌ **${ign}** has never played Wynncraft. Please enter the correct IGN. (Attempt ${ignAttempts}/${MAX_IGN_ATTEMPTS})`)
-                ]
+
+            const guildInfo = getGuildInfo(playerData);
+            guildName = guildInfo.name;
+            guildPrefix = guildInfo.prefix;
+            highestLevel = getHighestClassLevel(playerData);
+
+            await saveApplicationResumeData(applicationId, {
+                ign, guildName, guildPrefix, highestLevel, confirmSent: true
             });
-            playerData = null;
-            continue;
         }
 
-        const guildInfo = getGuildInfo(playerData);
-        guildName = guildInfo.name;
-        guildPrefix = guildInfo.prefix;
-        highestLevel = getHighestClassLevel(playerData);
+        const { wars, raids } = playerData?.globalData ?? { wars: 0, raids: { total: 0 } };
+        const totalLevel = playerData?.globalData?.totalLevel ?? 0;
+        const playtime = playerData?.playtime ?? 0;
 
-        await saveApplicationResumeData(applicationId, {
-            ign, guildName, guildPrefix, highestLevel,
-            confirmSent: true
-        });
-
-
-        const { wars, totalLevel, raids } = playerData.globalData;
-        const playtime = playerData.playtime;
         let confirmMsg;
-            if (!confirmAlreadySent) {
-             confirmMsg = await thread.send({
+        if (!confirmAlreadySent) {
+            confirmMsg = await thread.send({
                 embeds: [new EmbedBuilder()
                     .setColor(0xAA0000)
                     .setTitle('Is this your account?')
@@ -220,10 +214,13 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
                 )]
             });
         }
+
         const confirmCollected = await thread.awaitMessageComponent({
             filter: i => i.user.id === member.id && i.customId.startsWith('confirm_ign:'),
             time: 0
         }).catch(() => null);
+
+        if (confirmMsg) await confirmMsg.edit({ components: [] });
 
         if (confirmCollected?.customId === 'confirm_ign:yes') {
             await confirmCollected.reply({ content: '✅ Account confirmed, continuing...', ephemeral: true });
@@ -231,6 +228,7 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
             await saveApplicationAnswers(applicationId, answers, 'questions');
             await saveApplicationResumeData(applicationId, {
                 ign, guildName, guildPrefix, highestLevel
+                // confirmSent intentionally omitted — clears it
             });
         } else {
             await confirmCollected?.reply({ content: '❌ No problem, let\'s try a different IGN.', ephemeral: true });
@@ -269,11 +267,11 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
             'Are you interested in participating in guild warring? If so, rate from 1-10',
             'What languages do you speak?',
             'Are there any things done by online people that may irritate you? (i.e pet peeve)',
-            'Do you accept our general rules in https://discord.com/channels/983006019850469406/1211390009916264509 and our [guild rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
+            'Please accept our rules in #rules as well as in https://imgur.com/a/cmWApkT',
         ] : type === 'veteran' ? [
             'Why did you leave the guild?',
             'Why do you want to return?',
-            'Do you accept our general rules in https://discord.com/channels/983006019850469406/1211390009916264509 and our [guild rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
+            'Please accept our rules in #rules as well as in https://imgur.com/a/cmWApkT',
         ] : [
             'Why do you feel you deserve a promotion?',
             'What are your recent achievements?',
@@ -281,31 +279,23 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
         ...(guildName ? [`We can see you are in **[${guildPrefix}] ${guildName}**. Why are you looking to leave?`] : []),
     ];
 
-    // Figure out how many questions already answered so we can skip them
     const alreadyAnswered = answers.filter(a => dynamicQuestions.includes(a.question)).length;
     const remainingQuestions = dynamicQuestions.slice(alreadyAnswered);
 
-    const lastSentQuestion = resumeFrom?.lastSentQuestion ?? null;
-        console.log(`[QA] lastSentQuestion: ${lastSentQuestion}`);
+    for (const question of remainingQuestions) {
+        await saveApplicationResumeData(applicationId, {
+            ign, guildName, guildPrefix, highestLevel,
+            lastSentQuestion: question
+        });
 
-        // ... then in the loop:
-        for (const question of remainingQuestions) {
-            console.log(`[QA] Processing question: "${question}", firstQuestion: ${firstQuestion}, matches: ${lastSentQuestion === question}`);
-
-            await saveApplicationResumeData(applicationId, {
-                ign, guildName, guildPrefix, highestLevel,
-                lastSentQuestion: question
+        if (firstQuestion && lastSentQuestion === question) {
+            firstQuestion = false;
+        } else {
+            await thread.send({
+                embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription(`❓ ${question}`)]
             });
-
-            if (firstQuestion && lastSentQuestion === question) {
-                firstQuestion = false;
-                console.log(`[QA] Skipping send — already in chat`);
-            } else {
-                await thread.send({
-                    embeds: [new EmbedBuilder().setColor(0xAA0000).setDescription(`❓ ${question}`)]
-                });
-                firstQuestion = false;
-            }
+            firstQuestion = false;
+        }
 
         const answer = await awaitAnswer(thread, member.id);
         if (answer === null) return null;
@@ -313,6 +303,7 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
         answers.push({ question, answer });
         await saveApplicationAnswers(applicationId, answers, 'questions');
     }
+
     return { answers, playerData, ign, highestLevel };
 }
 
