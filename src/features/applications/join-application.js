@@ -423,8 +423,10 @@ async function handleApplicationButton(interaction, type) {
 
 async function handleApplicationVote(interaction, voteType) {
     const member = interaction.member;
+    const isReviewer = config.get('votesystem')['ticket-access-roles']?.some(roleId => member.roles.cache.has(roleId));
 
-    if (!member.permissions.has(PermissionFlagsBits.ManageThreads)) {
+
+    if (!member.permissions.has(PermissionFlagsBits.ManageThreads) && !isReviewer) {
         return interaction.reply({ content: '❌ You do not have permission to vote.', ephemeral: true });
     }
 
@@ -488,8 +490,9 @@ async function handleCloseApplication(interaction) {
 
     const isTicketOwner = thread.name.endsWith(member.user.username.toLowerCase());
     const isStaff = member.permissions.has(PermissionFlagsBits.ManageThreads);
+    const isReviewer = config.get('votesystem')['ticket-access-roles']?.some(roleId => member.roles.cache.has(roleId));
 
-    if (!isTicketOwner && !isStaff) {
+    if (!isTicketOwner && !isStaff && !isReviewer) {
         return interaction.reply({ content: '❌ You do not have permission to close this ticket.', ephemeral: true });
     }
 
