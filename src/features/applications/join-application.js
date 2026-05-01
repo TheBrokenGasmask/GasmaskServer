@@ -266,12 +266,13 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
             'Are you interested in participating in guild raids? If so, rate from 1-10',
             'Are you interested in participating in guild warring? If so, rate from 1-10',
             'What languages do you speak?',
-            'Are there any things done by online people that may irritate you? (i.e pet peeve)',
-            'Please accept our rules in #rules as well as in https://imgur.com/a/cmWApkT',
+            'Are there any things done by people online that may irritate you? (i.e pet peeve)',
+            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
         ] : type === 'veteran' ? [
             'Why did you leave the guild?',
             'Why do you want to return?',
-            'Please accept our rules in #rules as well as in https://imgur.com/a/cmWApkT',
+            'What is your reason for joining and how will you contribute to the guild?',
+            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
         ] : [
             'Why do you feel you deserve a promotion?',
             'What are your recent achievements?',
@@ -423,8 +424,10 @@ async function handleApplicationButton(interaction, type) {
 
 async function handleApplicationVote(interaction, voteType) {
     const member = interaction.member;
+    const isReviewer = config.get('votesystem')['ticket-access-roles']?.some(roleId => member.roles.cache.has(roleId));
 
-    if (!member.permissions.has(PermissionFlagsBits.ManageThreads)) {
+
+    if (!member.permissions.has(PermissionFlagsBits.ManageThreads) && !isReviewer) {
         return interaction.reply({ content: '❌ You do not have permission to vote.', ephemeral: true });
     }
 
@@ -488,8 +491,9 @@ async function handleCloseApplication(interaction) {
 
     const isTicketOwner = thread.name.endsWith(member.user.username.toLowerCase());
     const isStaff = member.permissions.has(PermissionFlagsBits.ManageThreads);
+    const isReviewer = config.get('votesystem')['ticket-access-roles']?.some(roleId => member.roles.cache.has(roleId));
 
-    if (!isTicketOwner && !isStaff) {
+    if (!isTicketOwner && !isStaff && !isReviewer) {
         return interaction.reply({ content: '❌ You do not have permission to close this ticket.', ephemeral: true });
     }
 

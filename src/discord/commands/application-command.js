@@ -89,7 +89,7 @@ async execute(interaction) {
         .setTitle(`📋 TBGM — ${subcommand === 'join' ? 'Guild Application' : 'Rank Promotion'}`)
         .setDescription(
             subcommand === 'join'
-                ? 'Want to join the guild? Click the button below to open an application ticket.'
+                ? 'You have to be lvl 110+ to apply, if you\'re below lvl 110, you cannot join until you reach that level.\n\nClick on the button below to create an application to join [TBGM] The Broken Gasmask and please wait for advisors+ to review your application within a day.\n\nReturning members are former members who used to be part of TBGM before may click the returning members below'
                 : 'Ready for a rank promotion? Click the button below to start your application.'
         )
         .setFooter({ text: 'TBGM Application System' })
