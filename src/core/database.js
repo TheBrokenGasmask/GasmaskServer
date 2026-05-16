@@ -1430,6 +1430,6 @@ async function saveApplicationResumeData(applicationId, data) {
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
-    createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
+    createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, getPlayerByUUID, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
     setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage, createApplication, setApplicationMessageIds, getApplicationByThread,
     getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData, updateApplicationIgn };
