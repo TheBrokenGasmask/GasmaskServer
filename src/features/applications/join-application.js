@@ -519,7 +519,7 @@ async function restoreApplications(client) {
     for (const app of pending) {  // ✅ app is defined here
         console.log(`[Restore] Processing app ID ${app.id}, thread ${app.thread_id}`);
 
-        const savedAnswers = app.answers ?? null;
+        const savedAnswers = Array.isArray(app.answers) ? app.answers : null;
         const savedIgn = savedAnswers?.find(a => a.question === 'Wynncraft IGN')?.answer ?? null;
 
         const resumeFrom = app.resume_data ? {
