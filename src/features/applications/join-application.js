@@ -425,26 +425,24 @@ async function handleApplicationButton(interaction, type) {
 async function handleApplicationVote(interaction, voteType) {
     const member = interaction.member;
     const isReviewer = config.get('votesystem')['ticket-access-roles']?.some(roleId => member.roles.cache.has(roleId));
-
-
     if (!member.permissions.has(PermissionFlagsBits.ManageThreads) && !isReviewer) {
         return interaction.reply({ content: '❌ You do not have permission to vote.', ephemeral: true });
     }
-
     await interaction.deferReply({ ephemeral: true });
 
-    // Find application by review message
     const application = await getApplicationByReviewMessage(interaction.message.id);
     if (!application) {
         return interaction.editReply({ content: '❌ Could not find this application in the database.' });
     }
 
-    // Save/update vote (upsert handles vote changes)
-    await upsertVote(application.id, member.id, voteType);
+    // bail early if already resolved
+    if (application.status === 'accepted' || application.status === 'declined') {
+        return interaction.editReply({ content: '✅ This application is already resolved.' });
+    }
 
+    await upsertVote(application.id, member.id, voteType);
     const { accepts, declines } = await getVotes(application.id);
 
-    // Update the vote bar in the ticket thread
     const thread = interaction.guild.channels.cache.get(application.thread_id);
     if (thread) {
         try {
@@ -457,7 +455,6 @@ async function handleApplicationVote(interaction, voteType) {
 
     await interaction.editReply({ content: `✅ Your vote has been recorded as **${voteType}**. You can change it at any time.` });
 
-    // Check threshold
     if (accepts >= REQUIRED_VOTES) {
         await setApplicationStatus(application.id, 'accepted');
         if (thread) {
@@ -600,7 +597,7 @@ async function restoreApplications(client) {
             const reviewChannelConfig = config.get('votesystem');
             const reviewChannel = thread.guild.channels.cache.get(reviewChannelConfig['review-channel-id']);
 
-            if (reviewChannel) {
+            if (reviewChannel && !app.review_message_id) {
                 const summaryEmbed = new EmbedBuilder()
                     .setColor(0xAA0000)
                     .setTitle(`📋 New Application — ${ign}`)
@@ -620,9 +617,13 @@ async function restoreApplications(client) {
                     )]
                 });
 
-                const voteBarMsg = await thread.send({ embeds: [buildVoteBarEmbed(0, 0)] });
-                await setApplicationMessageIds(app.id, voteBarMsg.id, reviewMsg.id);
-            }
+                let voteBarMsgId = app.vote_bar_message_id;
+                    if (!voteBarMsgId) {
+                        const voteBarMsg = await thread.send({ embeds: [buildVoteBarEmbed(0, 0)] });
+                        voteBarMsgId = voteBarMsg.id;
+                    }
+                    await setApplicationMessageIds(app.id, voteBarMsgId, reviewMsg.id);
+                }
         } catch (err) {
             console.error(`[Restore] Error restoring application ${app.id}:`, err);
         }
