@@ -57,7 +57,7 @@ module.exports = {
         let fields = [];
 
         for (const [uuid, raidCount] of leaderData) {
-            let playerName = await getPlayerUsername(uuid) ?? uuid.split('-')[0];
+            let playerName = await getPlayerUsername(uuid);
             fields.push({ name: playerName, value: `\`\`\`${raidCount}\`\`\``});
         }
 
