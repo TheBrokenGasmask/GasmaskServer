@@ -211,7 +211,23 @@ async function createTables() {
         );`
         await connection.execute(createApplicationVotesTableQuery);
 
+        const CreateRaidTrackerTableQuery = `
+        CREATE TABLE IF NOT EXISTS guild_raids (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            uuid        VARCHAR(36) NOT NULL,
+            raid0       INT NOT NULL DEFAULT 0,
+            raid1       INT NOT NULL DEFAULT 0,
+            raid2       INT NOT NULL DEFAULT 0,
+            raid3       INT NOT NULL DEFAULT 0,
+            raid4       INT NOT NULL DEFAULT 0,
+            total       INT NOT NULL DEFAULT 0,
+            captured_at TIMESTAMP NOT NULL,
+            INDEX idx_time (captured_at),
+            INDEX idx_uuid (uuid)
+        );`
+        await connection.execute(CreateRaidTrackerTableQuery);
 
+    
 
 
         connection.release();
@@ -235,6 +251,22 @@ async function insertRaid(raid, player1, player2, player3, player4, reporter, se
         console.error("Error inserting raid: ", err);
     }
 }
+
+async function insertRaidSnapshot(uuid, raidCounts, total, capturedAt) {
+    try {
+        const connection = await pool.getConnection();
+        const insertQuery = `
+            INSERT INTO guild_raids (uuid, raid0, raid1, raid2, raid3, raid4, total, captured_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        `;
+        await connection.execute(insertQuery, [uuid, ...raidCounts, total, capturedAt]);
+        connection.release();
+    } catch (err) {
+        console.error('Error inserting raid snapshot: ', err);
+    }
+}
+
+
 
 async function insertWar(player, timeInWar, towerEhp, towerDps, territory, ownerGuild) {
     try {
@@ -562,41 +594,46 @@ async function getOwedAspects() {
 
 async function getRaidLeaderboard(raid, timestamp = null) {
     try {
-        let playerMap = new Map();
+        const raidColumn = raid === -1 ? 'total' : `raid${raid}`;
 
-        const connection = await pool.getConnection();
-        const query = `
-            SELECT uuid FROM players;
-        `;
+        let query;
+        let params;
 
-        const [rows] = await connection.execute(query);
-
-        for (const row of rows) {
-            let uuid = row.uuid;
-            let raids = await getRaids(uuid, timestamp);
-
-            let raidCount = 0;
-            for (const raidRow of raids) {
-                if (raid === -1 || raidRow.raid === raid) raidCount++;
-            }
-
-            playerMap.set(uuid, raidCount);
+        if (timestamp) {
+            // diff between closest snapshot to timestamp and latest
+            query = `
+                SELECT 
+                    a.uuid,
+                    (a.${raidColumn} - COALESCE(b.${raidColumn}, 0)) as raidCount
+                FROM guild_raids a
+                LEFT JOIN guild_raids b
+                    ON a.uuid = b.uuid
+                    AND b.captured_at = (
+                        SELECT MAX(captured_at) FROM guild_raids
+                        WHERE captured_at <= ?
+                    )
+                WHERE a.captured_at = (SELECT MAX(captured_at) FROM guild_raids)
+                HAVING raidCount > 0
+                ORDER BY raidCount DESC
+            `;
+            params = [timestamp];
+        } else {
+            query = `
+                SELECT uuid, ${raidColumn} as raidCount
+                FROM guild_raids
+                WHERE captured_at = (SELECT MAX(captured_at) FROM guild_raids)
+                HAVING raidCount > 0
+                ORDER BY raidCount DESC
+            `;
+            params = [];
         }
 
-        connection.release();
-
-        playerMap = new Map([...playerMap.entries()].sort((a, b) => b[1] - a[1]));
-
-        let leaderArray = [...playerMap.entries()];
-        leaderArray = leaderArray.filter(([key, value]) => value > 0);
-        playerMap = new Map(leaderArray);
-
-        return playerMap;
+        const [rows] = await pool.query(query, params);
+        return new Map(rows.map(row => [row.uuid, row.raidCount]));
     } catch (err) {
-        console.error("Error getting leaderboard: ", err);
+        console.error('Error getting leaderboard:', err);
+        return new Map();
     }
-
-    return [];
 }
 
 async function getWarLeaderboard(difficultyIndex, timestamp = null) {
@@ -1428,8 +1465,82 @@ async function saveApplicationResumeData(applicationId, data) {
     }
 }
 
+async function getLatestGuildRaids(uuid = null, fromTimestamp = null) {
+    try {
+        if (fromTimestamp) {
+            // diff between closest snapshot to fromTimestamp and latest
+            const [rows] = await pool.query(`
+                SELECT 
+                    a.uuid,
+                    (a.raid0 - COALESCE(b.raid0, 0)) as raid0,
+                    (a.raid1 - COALESCE(b.raid1, 0)) as raid1,
+                    (a.raid2 - COALESCE(b.raid2, 0)) as raid2,
+                    (a.raid3 - COALESCE(b.raid3, 0)) as raid3,
+                    (a.raid4 - COALESCE(b.raid4, 0)) as raid4,
+                    (a.total - COALESCE(b.total, 0)) as total
+                FROM guild_raids a
+                LEFT JOIN guild_raids b
+                    ON a.uuid = b.uuid
+                    AND b.captured_at = (
+                        SELECT MAX(captured_at) FROM guild_raids
+                        WHERE captured_at <= ?
+                        ${uuid ? 'AND uuid = ?' : ''}
+                    )
+                WHERE a.captured_at = (SELECT MAX(captured_at) FROM guild_raids)
+                ${uuid ? 'AND a.uuid = ?' : ''}
+            `, uuid ? [fromTimestamp, uuid, uuid] : [fromTimestamp]);
+            return rows;
+        }
+
+        const [rows] = await pool.query(`
+            SELECT uuid, raid0, raid1, raid2, raid3, raid4, total
+            FROM guild_raids
+            WHERE captured_at = (SELECT MAX(captured_at) FROM guild_raids)
+            ${uuid ? 'AND uuid = ?' : ''}
+            ORDER BY total DESC
+        `, uuid ? [uuid] : []);
+        return rows;
+    } catch (err) {
+        console.error('Error fetching latest guild raids:', err);
+        return [];
+    }
+}
+
+async function getRaidsDiff(startTimestamp, endTimestamp) {
+    try {
+        const [rows] = await pool.query(`
+            SELECT 
+                a.uuid,
+                (a.raid0 - COALESCE(b.raid0, 0)) as raid0,
+                (a.raid1 - COALESCE(b.raid1, 0)) as raid1,
+                (a.raid2 - COALESCE(b.raid2, 0)) as raid2,
+                (a.raid3 - COALESCE(b.raid3, 0)) as raid3,
+                (a.raid4 - COALESCE(b.raid4, 0)) as raid4,
+                (a.total - COALESCE(b.total, 0)) as total
+            FROM guild_raids a
+            LEFT JOIN guild_raids b
+                ON a.uuid = b.uuid
+                AND b.captured_at = (
+                    SELECT MAX(captured_at) FROM guild_raids
+                    WHERE captured_at <= ?
+                )
+            WHERE a.captured_at = (
+                SELECT MAX(captured_at) FROM guild_raids
+                WHERE captured_at <= ?
+            )
+            HAVING total > 0
+            ORDER BY total DESC
+        `, [startTimestamp, endTimestamp]);
+        return rows;
+    } catch (err) {
+        console.error('Error getting raids diff:', err);
+        return [];
+    }
+}
+
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
     getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
     setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage, createApplication, setApplicationMessageIds, getApplicationByThread,
-    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData, updateApplicationIgn };
+    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData, updateApplicationIgn,insertRaidSnapshot,
+    getLatestGuildRaids, getRaidsDiff};

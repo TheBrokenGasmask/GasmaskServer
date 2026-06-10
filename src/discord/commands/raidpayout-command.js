@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getPlayerUsername, getRaidCount, getRaids, getPlayersByGuild} = require("../../core/database");
+const { getPlayerUsername, getPlayersByGuild, getRaidsDiff } = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 const {getGuildCache} = require("../../features/player/guild-cache");
 const { rankService } = require("../../features/ranks/rank-service");
@@ -35,7 +35,7 @@ module.exports = {
         const raidCaptainPay = parseFloat(interaction.options.getString('raidcaptain'));
         const commanderPay = parseFloat(interaction.options.getString('commander'));
         const advisorPay = parseFloat(interaction.options.getString('advisor'));
-        try{
+        try {
             const alertConfig = config.get('alert-command');
             const requiredRoleId = alertConfig['required-role-id'];
 
@@ -45,7 +45,6 @@ module.exports = {
                     .setTitle('❌ Permission Denied')
                     .setDescription('You do not have permission to use this command.')
                     .setTimestamp();
-                
                 await interaction.reply({ embeds: [noPermissionEmbed], ephemeral: true });
                 return;
             }
@@ -53,9 +52,9 @@ module.exports = {
             let guildCache = getGuildCache();
 
             if (!guildCache || !guildCache.members) {
-                await interaction.reply({ 
-                    content: 'Guild cache is empty or unavailable.', 
-                    ephemeral: true 
+                await interaction.reply({
+                    content: 'Guild cache is empty or unavailable.',
+                    ephemeral: true
                 });
                 return;
             }
@@ -86,7 +85,7 @@ module.exports = {
             };
 
             const processedMembers = [];
-            
+
             for (const member of guildCache.members) {
                 const discordId = uuidToDiscordMap.get(member.uuid);
                 let finalRankString = getGuildRankString(member.rank);
@@ -96,11 +95,11 @@ module.exports = {
                     const memberRank = rankMap.get(discordId);
                     if (memberRank && memberRank.identifier) {
                         const discordRankString = memberRank.identifier.trim();
-                        
+
                         if (discordRankString.toLowerCase() === 'recruit') {
                             continue;
                         }
-                        
+
                         if (discordRankString.toLowerCase() !== finalRankString.toLowerCase()) {
                             finalRankString = discordRankString;
                             rankSource = "discord";
@@ -134,45 +133,33 @@ module.exports = {
                 const currentDay = endFriday.getUTCDay();
                 const daysToSubtract = currentDay <= 5 ? (currentDay + 2) % 7 : 1;
                 endFriday.setUTCDate(endFriday.getUTCDate() - daysToSubtract);
-
                 endFriday.setUTCHours(18, 0, 0, 0);
 
                 const startFriday = new Date(endFriday);
                 startFriday.setUTCDate(startFriday.getUTCDate() - 7);
 
                 const formatForMySQL = (date) =>
-                date.toISOString().slice(0, 19).replace('T', ' ');
+                    date.toISOString().slice(0, 19).replace('T', ' ');
 
                 return {
-                startTimestamp: formatForMySQL(startFriday),
-                endTimestamp: formatForMySQL(endFriday),
+                    startTimestamp: formatForMySQL(startFriday),
+                    endTimestamp: formatForMySQL(endFriday),
                 };
             };
+            
             const { startTimestamp, endTimestamp } = calculateResetRange();
 
-            const membersWithRaids = await Promise.all(
-                processedMembers.map(async (member) => {
-                    try {
-                        const memberRaids = await getRaids(member.uuid, startTimestamp, endTimestamp);
-                        const raidCount = memberRaids ? memberRaids.length : 0;
-                        
-                        return {
-                            ...member,
-                            raidCount: raidCount
-                        };
-                    } catch (error) {
-                        console.error(`Error fetching raids for ${member.username}:`, error);
-                        return {
-                            ...member,
-                            raidCount: 0
-                        };
-                    }
-                })
-            );
+            const raidDiffs = await getRaidsDiff(startTimestamp, endTimestamp);
+            const raidDiffMap = new Map(raidDiffs.map(row => [row.uuid, row.total]));
+
+            const membersWithRaids = processedMembers.map(member => ({
+                ...member,
+                raidCount: raidDiffMap.get(member.uuid) ?? 0
+            }));
 
             const membersWithPayouts = membersWithRaids.map(member => {
                 const baseLE = member.raidCount * basePay;
-                
+
                 let rankBonus = 0;
                 const rankLower = member.rankString.toLowerCase();
 
@@ -183,9 +170,9 @@ module.exports = {
                 } else if (['advisor', 'chief', 'council', 'owner'].includes(rankLower)) {
                     rankBonus = member.raidCount * advisorPay;
                 }
-                
+
                 const totalLE = Math.floor(baseLE + rankBonus);
-                
+
                 return {
                     ...member,
                     baseLE: Math.floor(baseLE),
@@ -213,24 +200,18 @@ module.exports = {
                     isTop3: false
                 };
             });
+
             membersWithFinalPayouts.sort((a, b) => {
                 if (a.isTop3 && !b.isTop3) return -1;
                 if (!a.isTop3 && b.isTop3) return 1;
-                
-                if (a.totalLE !== b.totalLE) {
-                    return b.totalLE - a.totalLE;
-                }
-                
-                if (a.raidCount !== b.raidCount) {
-                    return b.raidCount - a.raidCount;
-                }
-                
+                if (a.totalLE !== b.totalLE) return b.totalLE - a.totalLE;
+                if (a.raidCount !== b.raidCount) return b.raidCount - a.raidCount;
                 return a.username.localeCompare(b.username);
             });
 
-            const totalRaids =  await getRaidCount(null, startTimestamp, endTimestamp);
+            const totalRaids = Math.round(raidDiffs.reduce((sum, row) => sum + row.total, 0) / 4);
             const totalLE = membersWithFinalPayouts.reduce((sum, member) => sum + member.totalLE, 0);
-            
+
             const memberPayouts = membersWithFinalPayouts
                 .filter(member => member.raidCount >= 10)
                 .map(member => `${member.username} - ${member.totalLE}le`)
@@ -241,8 +222,8 @@ module.exports = {
             const cardBuffer = await createRaidPayoutCard(topUuids, topName);
             const plaintextList = `This week TBGM completed a total of ${totalRaids} raids!\nContact a chief to claim your payouts!\n---------------------------------\n${memberPayouts}\n---------------------------------`;
 
-            const attachment = new AttachmentBuilder(cardBuffer, { 
-                name: 'raid-card.png' 
+            const attachment = new AttachmentBuilder(cardBuffer, {
+                name: 'raid-card.png'
             });
 
             await interaction.reply({ content: 'Processing payout...', ephemeral: true });
@@ -252,21 +233,17 @@ module.exports = {
             } catch (error) {
                 console.error('Error deleting reply:', error);
             }
+
             await interaction.channel.send({ content: `<@&1220555684362457138>` });
-            await interaction.channel.send({files: [attachment] });
+            await interaction.channel.send({ files: [attachment] });
             await interaction.channel.send({ content: plaintextList });
 
             const formatLEToStacks = (totalLE) => {
                 const stacks = Math.floor(totalLE / 64);
                 const remainder = totalLE % 64;
-                
-                if (stacks === 0) {
-                    return `${remainder}le`;
-                } else if (remainder === 0) {
-                    return `${stacks}stx`;
-                } else {
-                    return `${stacks}stx ${remainder}le`;
-                }
+                if (stacks === 0) return `${remainder}le`;
+                else if (remainder === 0) return `${stacks}stx`;
+                else return `${stacks}stx ${remainder}le`;
             };
 
             const formattedLE = formatLEToStacks(totalLE);
@@ -280,9 +257,9 @@ module.exports = {
             }
         } catch (error) {
             console.error('Error in raidpayout command:', error);
-            await interaction.reply({ 
-                content: 'An error occurred while processing the raid payout list', 
-                ephemeral: true 
+            await interaction.reply({
+                content: 'An error occurred while processing the raid payout list',
+                ephemeral: true
             });
         }
     },
