@@ -71,7 +71,7 @@ function getRaidList(guildData) {
   );
 }
 
-const RANKS = ['owner', 'chief', 'strategist', 'recruiter', 'recruit'];
+const RANKS = ['owner', 'chief', 'strategist', 'captain', 'recruiter', 'recruit'];
 
 function getAllMembers(guildData) {
   const members = guildData.members;
