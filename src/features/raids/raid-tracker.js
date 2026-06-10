@@ -48,7 +48,7 @@ function getGuildRaidTotals(guildData) {
   const raidTotals = {};
 
   for (const member of members) {
-    const raidList = member.globalData?.guildRaids?.list ?? {};
+    const raidList = member.globalData?.currentGuildRaids?.list ?? {};
 
     for (const [raidName, count] of Object.entries(raidList)) {
       raidTotals[raidName] = (raidTotals[raidName] ?? 0) + count;
@@ -64,8 +64,8 @@ function getRaidList(guildData) {
     members.map(member => [
       member.uuid,
       {
-        total: member.globalData?.guildRaids?.total ?? 0,
-        ...member.globalData?.guildRaids?.list ?? {}
+        total: member.globalData?.currentGuildRaids?.total ?? 0,
+        ...member.globalData?.currentGuildRaids?.list ?? {}
       }
     ])
   );
