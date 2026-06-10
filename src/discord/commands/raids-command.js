@@ -5,7 +5,7 @@ const { daysToTimestamp } = require("../../core/utilities");
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('guildraids')
+        .setName('raids')
         .setDescription('Returns the latest guild raid snapshot')
         .addStringOption(option =>
             option.setName('player')
