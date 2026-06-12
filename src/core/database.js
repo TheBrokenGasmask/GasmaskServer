@@ -567,7 +567,7 @@ async function getOwedAspects() {
             if (!needsAspects) continue;
 
             let aspects = await getAspects(uuid);
-            let raids = await getRaids(uuid);
+            let raids = await getLatestGuildRaids(uuid);
 
             let totalAspects = aspects.length;
             let owedAspects = Math.max(Math.floor(raids.length / 2) - totalAspects, 0);
@@ -1543,4 +1543,4 @@ module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLead
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
     setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage, createApplication, setApplicationMessageIds, getApplicationByThread,
     getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData, updateApplicationIgn,insertRaidSnapshot,
-    getLatestGuildRaids, getRaidsDiff};
+    getLatestGuildRaids, getRaidsDiff, getPlayerByUUID};
