@@ -567,10 +567,11 @@ async function getOwedAspects() {
             if (!needsAspects) continue;
 
             let aspects = await getAspects(uuid);
-            let raids = await getLatestGuildRaids(uuid);
+            const rows = await getLatestGuildRaids(uuid);
+            const raids = rows.length ? rows[0] : null;
 
             let totalAspects = aspects.length;
-            let owedAspects = Math.max(Math.floor(raids.length / 2) - totalAspects, 0);
+            let owedAspects = Math.max(Math.floor(raids.total / 2) - totalAspects, 0);
 
             playerMap.set(uuid, owedAspects);
         }
