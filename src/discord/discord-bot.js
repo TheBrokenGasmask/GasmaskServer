@@ -6,6 +6,7 @@ const { chatBridge } = require('../features/chat-bridge/chat-bridge-service');
 const { rankService } = require('../features/ranks/rank-service');
 const { initializeTerritoryTracker } = require('../features/trackers/territory-tracker');
 const { initializeGuildMemberTracker } = require('../features/trackers/guild-tracker');
+const { InitializeGuildRaidTracker } = require('../features/raids/raid-tracker');
 const { handleApplicationButton, handleApplicationVote, handleCloseApplication, restoreApplications } = require('../features/applications/join-application');require('./deploy-commands');
 
 const client = new Client({ 
@@ -93,6 +94,7 @@ client.once('ready', () => {
     // Initialize the trackers with Discord client
     initializeTerritoryTracker(client);
     initializeGuildMemberTracker(client);
+    InitializeGuildRaidTracker(client);
     console.log('Event trackers initialized');
     setTimeout(() => restoreApplications(client), 5000);
 });
