@@ -1251,6 +1251,8 @@ async function getTrackerMessage(channelId, type) {
 
 async function createApplication(threadId, applicantId, ign, type) {
     try {
+        console.log(`[CreateApp] thread=${threadId} member=${memberId} type=${type}`);
+        console.trace();
         const connection = await pool.getConnection();
         const query = `
             INSERT INTO applications (thread_id, applicant_id, ign, type)
@@ -1349,6 +1351,7 @@ async function getVotes(applicationId) {
 
 async function setApplicationStatus(applicationId, status) {
     try {
+        console.log(`[StatusChange] App ${applicationId} → ${status} at ${new Date().toISOString()}`);
         const connection = await pool.getConnection();
         const query = `UPDATE applications SET status = ? WHERE id = ?;`;
         await connection.execute(query, [status, applicationId]);
