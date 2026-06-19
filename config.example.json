@@ -37,19 +37,44 @@
       "identifier": "Recruit",
       "ingame-rank": 1
     },
-    "member": {
-      "discord-role-id": "MEMBER_ROLE_ID",
-      "identifier": "Member",
+    "recruiter": {
+      "discord-role-id": "RECRUITER_ROLE_ID",
+      "identifier": "Recruiter",
       "ingame-rank": 2
     },
-    "captain": {
-      "discord-role-id": "CAPTAIN_ROLE_ID",
-      "identifier": "Captain",
+    "raid-captain": {
+      "discord-role-id": "RAID_CAPTAIN_ROLE_ID",
+      "identifier": "Raid Captain",
+      "ingame-rank": 3
+    },
+    "war-captain": {
+      "discord-role-id": "WAR_CAPTAIN_ROLE_ID",
+      "identifier": "War Captain",
+      "ingame-rank": 3
+    },
+    "commander": {
+      "discord-role-id": "COMMANDER_ROLE_ID",
+      "identifier": "Commander",
       "ingame-rank": 4
+    },
+    "strategist": {
+      "discord-role-id": "STRATEGIST_ROLE_ID",
+      "identifier": "Strategist",
+      "ingame-rank": 4
+    },
+    "advisor": {
+      "discord-role-id": "ADVISOR_ROLE_ID",
+      "identifier": "Advisor",
+      "ingame-rank": 5
     },
     "chief": {
       "discord-role-id": "CHIEF_ROLE_ID",
       "identifier": "Chief",
+      "ingame-rank": 5
+    },
+    "council": {
+      "discord-role-id": "COUNCIL_ROLE_ID",
+      "identifier": "Council",
       "ingame-rank": 5
     }
   }
