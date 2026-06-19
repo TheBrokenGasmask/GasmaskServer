@@ -569,7 +569,7 @@ async function getOwedAspects() {
             let aspects = await getAspects(uuid);
             const rows = await getLatestGuildRaids(uuid);
             const raids = rows.length ? rows[0] : null;
-
+            if (!raids) continue; // ✅ skip players with no raid data yet
             let totalAspects = aspects.length;
             let owedAspects = Math.max(Math.floor(raids.total / 2) - totalAspects, 0);
 
