@@ -141,9 +141,19 @@ function formatTime(seconds) {
 
 function getLastPoolReset(weeksAgo = 0) {
   const date = new Date();
+  const currentDay = date.getUTCDay(); // 0 = Sunday, 5 = Friday
+  
+  let daysSinceFriday = (currentDay - 5 + 7) % 7; // days since last Friday
+  
+  date.setUTCDate(date.getUTCDate() - daysSinceFriday - (weeksAgo * 7));
   date.setUTCHours(17, 0, 0, 0);
-  date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 2) % 7 - (weeksAgo * 7));
-
+  
+  // if today IS Friday but it's before 17:00 UTC, roll back one more week
+  if (daysSinceFriday === 0 && date.getTime() > Date.now()) {
+    date.setUTCDate(date.getUTCDate() - 7);
+  }
+  
+  console.log('Calculated last pool reset timestamp:', date.toISOString());
   return date.toISOString().slice(0, 19).replace('T', ' ');
 }
 
