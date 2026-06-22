@@ -603,7 +603,7 @@ async function getRaidLeaderboard(raid, timestamp = null) {
         if (timestamp) {
             // diff between closest snapshot to timestamp and latest
             query = `
-                SELECT 
+                SELECT
                     a.uuid,
                     (a.${raidColumn} - COALESCE(b.${raidColumn}, 0)) as raidCount
                 FROM guild_raids a
@@ -612,6 +612,7 @@ async function getRaidLeaderboard(raid, timestamp = null) {
                     AND b.captured_at = (
                         SELECT MAX(captured_at) FROM guild_raids
                         WHERE captured_at <= ?
+                        AND uuid = a.uuid
                     )
                 WHERE a.captured_at = (SELECT MAX(captured_at) FROM guild_raids)
                 HAVING raidCount > 0
