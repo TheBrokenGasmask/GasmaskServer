@@ -1513,7 +1513,7 @@ async function getLatestGuildRaids(uuid = null, fromTimestamp = null) {
 async function getRaidsDiff(startTimestamp, endTimestamp) {
     try {
         const [rows] = await pool.query(`
-            SELECT 
+            SELECT
                 a.uuid,
                 (a.raid0 - COALESCE(b.raid0, 0)) as raid0,
                 (a.raid1 - COALESCE(b.raid1, 0)) as raid1,
@@ -1527,10 +1527,12 @@ async function getRaidsDiff(startTimestamp, endTimestamp) {
                 AND b.captured_at = (
                     SELECT MAX(captured_at) FROM guild_raids
                     WHERE captured_at <= ?
+                    AND uuid = a.uuid
                 )
             WHERE a.captured_at = (
                 SELECT MAX(captured_at) FROM guild_raids
                 WHERE captured_at <= ?
+                AND uuid = a.uuid
             )
             HAVING total > 0
             ORDER BY total DESC
