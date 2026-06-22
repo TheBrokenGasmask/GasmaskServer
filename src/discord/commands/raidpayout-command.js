@@ -36,6 +36,8 @@ module.exports = {
         const commanderPay = parseFloat(interaction.options.getString('commander'));
         const advisorPay = parseFloat(interaction.options.getString('advisor'));
         try {
+            await interaction.deferReply({ ephemeral: true });
+
             const alertConfig = config.get('alert-command');
             const requiredRoleId = alertConfig['required-role-id'];
 
@@ -45,16 +47,15 @@ module.exports = {
                     .setTitle('❌ Permission Denied')
                     .setDescription('You do not have permission to use this command.')
                     .setTimestamp();
-                await interaction.reply({ embeds: [noPermissionEmbed], ephemeral: true });
+                await interaction.editReply({ embeds: [noPermissionEmbed] });
                 return;
             }
 
             let guildCache = getGuildCache();
 
             if (!guildCache || !guildCache.members) {
-                await interaction.reply({
-                    content: 'Guild cache is empty or unavailable.',
-                    ephemeral: true
+                await interaction.editReply({
+                    content: 'Guild cache is empty or unavailable.'
                 });
                 return;
             }
@@ -226,13 +227,7 @@ module.exports = {
                 name: 'raid-card.png'
             });
 
-            await interaction.reply({ content: 'Processing payout...', ephemeral: true });
-
-            try {
-                await interaction.deleteReply();
-            } catch (error) {
-                console.error('Error deleting reply:', error);
-            }
+            await interaction.deleteReply();
 
             await interaction.channel.send({ content: `<@&1220555684362457138>` });
             await interaction.channel.send({ files: [attachment] });
@@ -257,10 +252,20 @@ module.exports = {
             }
         } catch (error) {
             console.error('Error in raidpayout command:', error);
-            await interaction.reply({
-                content: 'An error occurred while processing the raid payout list',
-                ephemeral: true
-            });
+            try {
+                if (interaction.deferred) {
+                    await interaction.editReply({
+                        content: 'An error occurred while processing the raid payout list'
+                    });
+                } else if (!interaction.replied) {
+                    await interaction.reply({
+                        content: 'An error occurred while processing the raid payout list',
+                        ephemeral: true
+                    });
+                }
+            } catch (replyError) {
+                console.error('Could not send error message to user:', replyError);
+            }
         }
     },
 };
