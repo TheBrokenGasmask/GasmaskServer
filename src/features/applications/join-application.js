@@ -71,6 +71,7 @@ function truncate(str, max = 1024) {
 // --- Q&A ---
 
 async function runApplicationQuestions(thread, member, type, applicationId, resumeFrom = null) {
+    console.log(`[QA] Starting for app ${applicationId}, resumeFrom:`, JSON.stringify(resumeFrom));
     const answers = resumeFrom?.answers ?? [{ question: 'Wynncraft IGN', answer: '' }];
 
     let ign = resumeFrom?.ign ?? '';
@@ -514,6 +515,9 @@ async function restoreApplications(client) {
     if (pending.length === 0) return;
 
     for (const app of pending) {  // ✅ app is defined here
+        console.log('app.resume_data:', app.resume_data);
+        console.log('app.answers:', app.answers, typeof app.answers);
+
         console.log(`[Restore] Processing app ID ${app.id}, thread ${app.thread_id}`);
 
         const savedAnswers = Array.isArray(app.answers) ? app.answers : null;

@@ -569,7 +569,7 @@ async function getOwedAspects() {
             let aspects = await getAspects(uuid);
             const rows = await getLatestGuildRaids(uuid);
             const raids = rows.length ? rows[0] : null;
-
+            if (!raids) continue; // ✅ skip players with no raid data yet
             let totalAspects = aspects.length;
             let owedAspects = Math.max(Math.floor(raids.total / 2) - totalAspects, 0);
 
@@ -1251,6 +1251,8 @@ async function getTrackerMessage(channelId, type) {
 
 async function createApplication(threadId, applicantId, ign, type) {
     try {
+        console.log(`[CreateApp] thread=${threadId} member=${memberId} type=${type}`);
+        console.trace();
         const connection = await pool.getConnection();
         const query = `
             INSERT INTO applications (thread_id, applicant_id, ign, type)
@@ -1349,6 +1351,7 @@ async function getVotes(applicationId) {
 
 async function setApplicationStatus(applicationId, status) {
     try {
+        console.log(`[StatusChange] App ${applicationId} → ${status} at ${new Date().toISOString()}`);
         const connection = await pool.getConnection();
         const query = `UPDATE applications SET status = ? WHERE id = ?;`;
         await connection.execute(query, [status, applicationId]);
