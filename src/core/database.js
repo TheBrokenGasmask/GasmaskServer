@@ -1252,7 +1252,7 @@ async function getTrackerMessage(channelId, type) {
 
 async function createApplication(threadId, applicantId, ign, type) {
     try {
-        console.log(`[CreateApp] thread=${threadId} member=${memberId} type=${type}`);
+        console.log(`[CreateApp] thread=${threadId} member=${applicantId} type=${type}`); // ✅
         console.trace();
         const connection = await pool.getConnection();
         const query = `
