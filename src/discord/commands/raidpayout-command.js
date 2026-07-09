@@ -149,6 +149,7 @@ module.exports = {
             };
             
             const { startTimestamp, endTimestamp } = calculateResetRange();
+            console.log(`Calculating raid payouts from ${startTimestamp} to ${endTimestamp}`);
 
             const raidDiffs = await getRaidsDiff(startTimestamp, endTimestamp);
             const raidDiffMap = new Map(raidDiffs.map(row => [row.uuid, row.total]));
