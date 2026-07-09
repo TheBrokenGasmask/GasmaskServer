@@ -226,13 +226,29 @@ async function createTables() {
             INDEX idx_uuid (uuid)
         );`
         await connection.execute(CreateRaidTrackerTableQuery);
+        await ensureIndex(connection, 'guild_raids', 'idx_guild_raids_captured_uuid', '(captured_at, uuid)');
 
-    
 
 
         connection.release();
     } catch (err) {
         console.error("Error creating table: ", err);
+    }
+}
+
+async function ensureIndex(connection, table, indexName, columns) {
+    const [rows] = await connection.query(
+        `SELECT COUNT(1) as cnt
+         FROM information_schema.statistics
+         WHERE table_schema = DATABASE()
+           AND table_name = ?
+           AND index_name = ?`,
+        [table, indexName]
+    );
+
+    if (rows[0].cnt === 0) {
+        await connection.query(`CREATE INDEX ${indexName} ON ${table} ${columns}`);
+        console.log(`Created index ${indexName} on ${table}`);
     }
 }
 
@@ -1512,6 +1528,17 @@ async function getLatestGuildRaids(uuid = null, fromTimestamp = null) {
 
 async function getRaidsDiff(startTimestamp, endTimestamp) {
     try {
+        const [[{ endTs }]] = await pool.query(
+            `SELECT MAX(captured_at) as endTs FROM guild_raids WHERE captured_at <= ?`,
+            [endTimestamp]
+        );
+        const [[{ startTs }]] = await pool.query(
+            `SELECT MAX(captured_at) as startTs FROM guild_raids WHERE captured_at <= ?`,
+            [startTimestamp]
+        );
+
+        if (!endTs) return [];
+
         const [rows] = await pool.query(`
             SELECT 
                 a.uuid,
@@ -1524,17 +1551,12 @@ async function getRaidsDiff(startTimestamp, endTimestamp) {
             FROM guild_raids a
             LEFT JOIN guild_raids b
                 ON a.uuid = b.uuid
-                AND b.captured_at = (
-                    SELECT MAX(captured_at) FROM guild_raids
-                    WHERE captured_at <= ?
-                )
-            WHERE a.captured_at = (
-                SELECT MAX(captured_at) FROM guild_raids
-                WHERE captured_at <= ?
-            )
+                AND b.captured_at = ?
+            WHERE a.captured_at = ?
             HAVING total > 0
             ORDER BY total DESC
-        `, [startTimestamp, endTimestamp]);
+        `, [startTs, endTs]);
+
         return rows;
     } catch (err) {
         console.error('Error getting raids diff:', err);
