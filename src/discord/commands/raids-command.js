@@ -1,50 +1,48 @@
-const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require("discord.js");
-const axios = require('axios');
-const {getPlayerUUID, getRaids, getPlayerUsername} = require("../../core/database");
-const {daysToTimestamp} = require("../../core/utilities");
-const {createRaidCard} = require("../../discord/image-generation/raids-card");
+const { SlashCommandBuilder, AttachmentBuilder } = require("discord.js");
+const { getLatestGuildRaids, getPlayerUsername, getPlayerUUID } = require("../../core/database");
+const { createRaidCard } = require("../../discord/image-generation/raids-card");
+const { daysToTimestamp } = require("../../core/utilities");
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('raids')
-        .setDescription('Returns data on the given player\'s completed guild raids')
+        .setDescription('Returns the latest guild raid snapshot')
         .addStringOption(option =>
             option.setName('player')
-                .setDescription('The name of the player')
+                .setDescription('Filter by player name')
                 .setRequired(true))
-        .addStringOption(option =>
+        .addIntegerOption(option =>
             option.setName('days')
-                .setDescription('The time period to check for raids')
-        ),
+                .setDescription('Number of days to look back')
+                .setRequired(false)
+                .setMinValue(1)),
     async execute(interaction) {
-        let playerName = interaction.options.getString('player');
-        let uuid = await getPlayerUUID(playerName);
+        await interaction.deferReply();
 
-        let days = interaction.options.getString('days');
-        if (days) days = parseInt(days);
+        const playerName = interaction.options.getString('player');
+        const days = interaction.options.getInteger('days');
+        const uuid = await getPlayerUUID(playerName);
 
         if (!uuid) {
-            await interaction.reply(`Unable to find player with the name ${playerName}`);
+            await interaction.editReply(`Could not find player ${playerName}.`);
             return;
         }
 
-        playerName = await getPlayerUsername(uuid);
+        const rows = await getLatestGuildRaids(uuid, days ? daysToTimestamp(days) : null);
 
-        let raidCounts = [0, 0, 0, 0, 0]
-        let raidsData = await getRaids(uuid, daysToTimestamp((days) ? days : -1));
-        let totalRaids = 0
-        for (let i = 0; i < raidsData.length; i++) {
-            let raidIndex = raidsData[i].raid;
-            raidCounts[raidIndex]++;
-            totalRaids++;
+        if (!rows.length) {
+            await interaction.editReply(`No raid data found for ${playerName}.`);
+            return;
         }
-        
-        const cardBuffer = await createRaidCard(uuid, playerName, raidCounts, totalRaids, days);
 
-        const attachment = new AttachmentBuilder(cardBuffer, { 
-            name: 'raid-card.png' 
-        });
+        const row = rows[0];
+        const raidCounts = [row.raid0, row.raid1, row.raid2, row.raid3, row.raid4];
+        const totalRaids = row.total;
 
-        await interaction.reply({files: [attachment] });
-    },
+        const resolvedName = await getPlayerUsername(uuid);
+        const cardBuffer = await createRaidCard(uuid, resolvedName, raidCounts, totalRaids, days);
+        const attachment = new AttachmentBuilder(cardBuffer, { name: 'raid-card.png' });
+
+        await interaction.editReply({ files: [attachment] });
+    }
 };

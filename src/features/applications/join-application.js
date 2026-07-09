@@ -71,6 +71,7 @@ function truncate(str, max = 1024) {
 // --- Q&A ---
 
 async function runApplicationQuestions(thread, member, type, applicationId, resumeFrom = null) {
+    console.log(`[QA] Starting for app ${applicationId}, resumeFrom:`, JSON.stringify(resumeFrom));
     const answers = resumeFrom?.answers ?? [{ question: 'Wynncraft IGN', answer: '' }];
 
     let ign = resumeFrom?.ign ?? '';
@@ -266,12 +267,13 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
             'Are you interested in participating in guild raids? If so, rate from 1-10',
             'Are you interested in participating in guild warring? If so, rate from 1-10',
             'What languages do you speak?',
-            'Are there any things done by online people that may irritate you? (i.e pet peeve)',
-            'Please accept our rules in #rules as well as in https://imgur.com/a/cmWApkT',
+            'Are there any things done by people online that may irritate you? (i.e pet peeve)',
+            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
         ] : type === 'veteran' ? [
             'Why did you leave the guild?',
             'Why do you want to return?',
-            'Please accept our rules in #rules as well as in https://imgur.com/a/cmWApkT',
+            'What is your reason for joining and how will you contribute to the guild?',
+            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
         ] : [
             'Why do you feel you deserve a promotion?',
             'What are your recent achievements?',
@@ -423,25 +425,25 @@ async function handleApplicationButton(interaction, type) {
 
 async function handleApplicationVote(interaction, voteType) {
     const member = interaction.member;
-
-    if (!member.permissions.has(PermissionFlagsBits.ManageThreads)) {
+    const isReviewer = config.get('votesystem')['ticket-access-roles']?.some(roleId => member.roles.cache.has(roleId));
+    if (!member.permissions.has(PermissionFlagsBits.ManageThreads) && !isReviewer) {
         return interaction.reply({ content: '❌ You do not have permission to vote.', ephemeral: true });
     }
-
     await interaction.deferReply({ ephemeral: true });
 
-    // Find application by review message
     const application = await getApplicationByReviewMessage(interaction.message.id);
     if (!application) {
         return interaction.editReply({ content: '❌ Could not find this application in the database.' });
     }
 
-    // Save/update vote (upsert handles vote changes)
-    await upsertVote(application.id, member.id, voteType);
+    // bail early if already resolved
+    if (application.status === 'accepted' || application.status === 'declined') {
+        return interaction.editReply({ content: '✅ This application is already resolved.' });
+    }
 
+    await upsertVote(application.id, member.id, voteType);
     const { accepts, declines } = await getVotes(application.id);
 
-    // Update the vote bar in the ticket thread
     const thread = interaction.guild.channels.cache.get(application.thread_id);
     if (thread) {
         try {
@@ -454,7 +456,6 @@ async function handleApplicationVote(interaction, voteType) {
 
     await interaction.editReply({ content: `✅ Your vote has been recorded as **${voteType}**. You can change it at any time.` });
 
-    // Check threshold
     if (accepts >= REQUIRED_VOTES) {
         await setApplicationStatus(application.id, 'accepted');
         if (thread) {
@@ -488,8 +489,9 @@ async function handleCloseApplication(interaction) {
 
     const isTicketOwner = thread.name.endsWith(member.user.username.toLowerCase());
     const isStaff = member.permissions.has(PermissionFlagsBits.ManageThreads);
+    const isReviewer = config.get('votesystem')['ticket-access-roles']?.some(roleId => member.roles.cache.has(roleId));
 
-    if (!isTicketOwner && !isStaff) {
+    if (!isTicketOwner && !isStaff && !isReviewer) {
         return interaction.reply({ content: '❌ You do not have permission to close this ticket.', ephemeral: true });
     }
 
@@ -513,9 +515,12 @@ async function restoreApplications(client) {
     if (pending.length === 0) return;
 
     for (const app of pending) {  // ✅ app is defined here
+        console.log('app.resume_data:', app.resume_data);
+        console.log('app.answers:', app.answers, typeof app.answers);
+
         console.log(`[Restore] Processing app ID ${app.id}, thread ${app.thread_id}`);
 
-        const savedAnswers = app.answers ?? null;
+        const savedAnswers = Array.isArray(app.answers) ? app.answers : null;
         const savedIgn = savedAnswers?.find(a => a.question === 'Wynncraft IGN')?.answer ?? null;
 
         const resumeFrom = app.resume_data ? {
@@ -596,7 +601,7 @@ async function restoreApplications(client) {
             const reviewChannelConfig = config.get('votesystem');
             const reviewChannel = thread.guild.channels.cache.get(reviewChannelConfig['review-channel-id']);
 
-            if (reviewChannel) {
+            if (reviewChannel && !app.review_message_id) {
                 const summaryEmbed = new EmbedBuilder()
                     .setColor(0xAA0000)
                     .setTitle(`📋 New Application — ${ign}`)
@@ -616,9 +621,13 @@ async function restoreApplications(client) {
                     )]
                 });
 
-                const voteBarMsg = await thread.send({ embeds: [buildVoteBarEmbed(0, 0)] });
-                await setApplicationMessageIds(app.id, voteBarMsg.id, reviewMsg.id);
-            }
+                let voteBarMsgId = app.vote_bar_message_id;
+                    if (!voteBarMsgId) {
+                        const voteBarMsg = await thread.send({ embeds: [buildVoteBarEmbed(0, 0)] });
+                        voteBarMsgId = voteBarMsg.id;
+                    }
+                    await setApplicationMessageIds(app.id, voteBarMsgId, reviewMsg.id);
+                }
         } catch (err) {
             console.error(`[Restore] Error restoring application ${app.id}:`, err);
         }

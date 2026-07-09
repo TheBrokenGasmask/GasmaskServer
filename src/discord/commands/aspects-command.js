@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, AttachmentBuilder } = require("discord.js");
-const {getPlayerUUID, getRaids, getPlayerUsername, getAspects, getGuild, getPlayerByUUID} = require("../../core/database");
+const {getPlayerUUID, getLatestGuildRaids, getPlayerUsername, getAspects, getGuild, getPlayerByUUID} = require("../../core/database");
 const { config } = require("../../core/config");
 const {createAspectsCard} = require("../../discord/image-generation/aspects-card");
 
@@ -30,14 +30,18 @@ module.exports = {
         playerName = await getPlayerUsername(uuid);
 
         let aspectData = await getAspects(uuid);
-        let raidData = await getRaids(uuid);
+        //let raidData = await getLatestGuildRaids(uuid);
+        const rows = await getLatestGuildRaids(uuid);
+        const raidData = rows.length ? rows[0] : null;
         let playerData = await getPlayerByUUID(uuid);
-
+        console.log('aspectData:', aspectData);
+        console.log('raidData:', raidData);
+        console.log('playerData:', playerData);
         let totalAspects = aspectData.length;
-        let owedAspects = Math.max(Math.floor(raidData.length / 2) - totalAspects, 0);
+        let owedAspects = Math.max(Math.floor(raidData.total / 2) - totalAspects, 0);
         let needsAspects = playerData?.needs_aspects ?? true;
 
-        const cardBuffer = await createAspectsCard(uuid, playerName, raidData.length, totalAspects, owedAspects, needsAspects);
+        const cardBuffer = await createAspectsCard(uuid, playerName, raidData.total, totalAspects, owedAspects, needsAspects);
 
         const attachment = new AttachmentBuilder(cardBuffer, {
             name: 'aspects-card.png'

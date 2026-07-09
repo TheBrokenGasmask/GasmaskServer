@@ -11,8 +11,11 @@ class AuthenticateEndpoint {
         if (!req.query.uuid) return res.status(400).send("Missing parameters");
         let {uuid} = req.query;
 
+        console.log(`[Auth] Authentication endpoint called for UUID: ${uuid}`);
+
         try {
             if (!await getMemberByUuid(uuid)) {
+                console.log(`[Auth] Player ${uuid} is not in the guild - rejecting`);
                 return res.status(403).send("Player is not in the guild");
             }
 
@@ -27,6 +30,7 @@ class AuthenticateEndpoint {
             }
 
             const tokens = generateTokenWithServerId(uuid);
+            console.log(`[Auth] Generated new serverId for ${uuid}, starting Mojang verification`);
             res.status(200).send(tokens.serverId);
 
             await sleep(2000);
@@ -55,13 +59,16 @@ class AuthenticateEndpoint {
             }
 
             const url = `https://sessionserver.mojang.com/session/minecraft/hasJoined?username=${username}&serverId=${serverId}`;
-            
+
+            console.log(`[Auth] Checking Mojang authentication for ${username} (${uuid}), attempt ${attempt}/${MAX_ATTEMPTS}`);
+
             request({
                 url: url,
                 timeout: 10000
             }, async (error, response, body) => {
                 try {
                     if (!error && response.statusCode === 200) {
+                        console.log(`[Auth] Mojang auth successful for ${username}`);
                         let authData;
                         try {
                             authData = JSON.parse(body);
@@ -96,9 +103,11 @@ class AuthenticateEndpoint {
                             }
                         }
                     } else {
+                        console.log(`[Auth] Mojang auth failed for ${username}: status=${response?.statusCode}, error=${error?.message || 'none'}`);
                         this.retryAuthentication(uuid, serverId, retry, attempt);
                     }
                 } catch (processError) {
+                    console.log(`[Auth] Error processing Mojang response for ${username}:`, processError.message);
                     this.retryAuthentication(uuid, serverId, retry, attempt);
                 }
             });
@@ -115,10 +124,12 @@ class AuthenticateEndpoint {
         const RETRY_DELAY = 5000;
 
         if (attempt < MAX_ATTEMPTS) {
+            console.log(`[Auth] Retrying Mojang auth for ${uuid} in ${RETRY_DELAY}ms (attempt ${attempt + 1}/${MAX_ATTEMPTS})`);
             setTimeout(async () => {
                 await this.checkForAuthentication(uuid, serverId, retry, attempt + 1);
             }, RETRY_DELAY);
         } else {
+            console.log(`[Auth] Max authentication attempts reached for ${uuid}, removing token`);
             removeToken(uuid);
         }
     }
