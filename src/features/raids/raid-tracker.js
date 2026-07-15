@@ -17,8 +17,8 @@ async function InitializeGuildRaidTracker(client) {
     try {
         await TrackGuildRaids();
         
-        updateInterval = setInterval(TrackGuildRaids, 120 * 1000); // 120-second polling
-        console.log('Guild member tracker initialized with 120-second refresh interval.');
+        updateInterval = setInterval(TrackGuildRaids, 300 * 1000); // 300-second polling
+        console.log('Guild member tracker initialized with 300-second refresh interval.');
     } catch (error) {
         console.error('Failed to initialize guild member tracker:', error);
     }
