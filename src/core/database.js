@@ -1432,13 +1432,28 @@ async function deleteTrackerMessage(channelId, type) {
     }
 }
 
+function parseJsonColumn(value) {
+    if (value == null) return null;
+    if (typeof value !== 'string') return value; // already parsed (e.g. real MySQL)
+    try {
+        return JSON.parse(value);
+    } catch (err) {
+        console.error('Failed to parse JSON column:', err);
+        return null;
+    }
+}
+
 async function getPendingApplications() {
     try {
         const connection = await pool.getConnection();
         const query = `SELECT * FROM applications WHERE status = 'pending';`;
         const [rows] = await connection.execute(query);
         connection.release();
-        return rows;
+        return rows.map(row => ({
+            ...row,
+            answers: parseJsonColumn(row.answers),
+            resume_data: parseJsonColumn(row.resume_data),
+        }));
     } catch (err) {
         console.error('Error fetching pending applications:', err);
         return [];
