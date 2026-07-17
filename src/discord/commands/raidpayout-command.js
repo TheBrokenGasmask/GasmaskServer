@@ -91,7 +91,6 @@ module.exports = {
                 'cb13ce8d-0d7c-4425-bee2-ba5a35c3590a'
             ]);
 
-            const processedMembers = [];
 
             for (const member of guildCache.members) {
                 if (ignoredUuids.has(member.uuid)) {
