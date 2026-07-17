@@ -146,7 +146,7 @@ function getLastPoolReset(weeksAgo = 0) {
   let daysSinceFriday = (currentDay - 5 + 7) % 7; // days since last Friday
   
   date.setUTCDate(date.getUTCDate() - daysSinceFriday - (weeksAgo * 7));
-  date.setUTCHours(17, 10, 0, 0);
+  date.setUTCHours(17, 0, 0, 0);
   
   // if today IS Friday but it's before 17:00 UTC, roll back one more week
   if (daysSinceFriday === 0 && date.getTime() > Date.now()) {
