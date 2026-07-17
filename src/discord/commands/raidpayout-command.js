@@ -134,7 +134,7 @@ module.exports = {
                 const currentDay = endFriday.getUTCDay();
                 const daysToSubtract = currentDay <= 5 ? (currentDay + 2) % 7 : 1;
                 endFriday.setUTCDate(endFriday.getUTCDate() - daysToSubtract);
-                endFriday.setUTCHours(18, 0, 0, 0);
+                endFriday.setUTCHours(18, 10, 0, 0);
 
                 const startFriday = new Date(endFriday);
                 startFriday.setUTCDate(startFriday.getUTCDate() - 7);
