@@ -85,17 +85,22 @@ module.exports = {
                 }
             };
 
-            const processedMembers = [];
+        
             const ignoredUuids = new Set([
                 'a828ce90-9e9b-4295-b6f4-eb977d947e96',
                 'cb13ce8d-0d7c-4425-bee2-ba5a35c3590a'
             ]);
 
+            const processedMembers = [];
 
             for (const member of guildCache.members) {
                 if (ignoredUuids.has(member.uuid)) {
                     continue;
                 }
+
+                const discordId = uuidToDiscordMap.get(member.uuid);
+                let finalRankString = getGuildRankString(member.rank);
+                let rankSource = "guild";
 
                 if (discordId) {
                     const memberRank = rankMap.get(discordId);
@@ -139,7 +144,7 @@ module.exports = {
                 const currentDay = endFriday.getUTCDay();
                 const daysToSubtract = currentDay <= 5 ? (currentDay + 2) % 7 : 1;
                 endFriday.setUTCDate(endFriday.getUTCDate() - daysToSubtract);
-                endFriday.setUTCHours(18, 0, 0, 0);
+                endFriday.setUTCHours(18, 10, 0, 0);
 
                 const startFriday = new Date(endFriday);
                 startFriday.setUTCDate(startFriday.getUTCDate() - 7);
