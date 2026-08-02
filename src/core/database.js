@@ -1486,9 +1486,9 @@ async function getGuildRaids(uuid = null, startTimestamp = null, endTimestamp = 
         if(uuid) {
         //grabs between time periodes
         const params = [];
-            if(startTs) params.push(startTs);
-            if(endTs) params.push(endTs);
-            if(uuid) params.push(uuid);
+            if (startTs) params.push(startTs);
+            if (endTs) params.push(endTs);
+            if (uuid) params.push(uuid);
         
         const [rows] = await pool.query(`
             SELECT
@@ -1504,13 +1504,13 @@ async function getGuildRaids(uuid = null, startTimestamp = null, endTimestamp = 
                 ON a.uuid = b.uuid
                 AND b.captured_at = (
                     SELECT MAX(captured_at) FROM guild_raids
-                    WHERE captured_at <= ?
+                    WHERE captured_at <= ${startTs ? '?' : '(SELECT MAX(captured_at) FROM guild_raids)'}
                 )
-            WHERE a.captured_at = ?
+            WHERE a.captured_at = ${endTs ? '?' : '(SELECT MAX(captured_at) FROM guild_raids)'}
             ${uuid ? 'AND a.uuid = ?' : ''}
             HAVING total > 0
             ORDER BY total DESC
-            `, params);
+        `, params);
             
 
             return rows
