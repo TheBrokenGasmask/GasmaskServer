@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, inlineCode } = require("discord.js");
 const { getPlayerUsername, getPlayersByGuild, getGuildRaids } = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 const {getGuildCache} = require("../../features/player/guild-cache");
@@ -226,7 +226,7 @@ module.exports = {
 
             const memberPayouts = membersWithFinalPayouts
                 .filter(member => member.raidCount >= 10)
-                .map(member => `${member.username} - ${member.totalLE}le`)
+                .map(member => inlineCode(`${member.username} - ${member.totalLE}le`))
                 .join('\n');
 
             const topUuids = top3Raiders.map(member => member.uuid);
