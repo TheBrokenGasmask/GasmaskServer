@@ -89,6 +89,11 @@ function getAllMembers(guildData) {
 async function insertAllRaidSnapshots(members) {
     const capturedAt = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+    const latestRows = await getGuildRaids(null, null, null); // raw-latest branch, all members
+    const latestByUuid = new Map(latestRows.map(row => [row.uuid, row]));
+
+    const raidColumns = ['raid0', 'raid1', 'raid2', 'raid3', 'raid4'];
+
     for (const [uuid, data] of Object.entries(members)) {
         const raidCounts = [0, 0, 0, 0, 0];
 
@@ -99,7 +104,23 @@ async function insertAllRaidSnapshots(members) {
             raidCounts[raidId] = count;
         }
 
-        const total = data.total ?? 0;
+        //this should fix issues with api being down, recounting or members turning their api off (so x->0->x jumps are prevented)
+        let total = data.total ?? 0;
+        const previous = latestByUuid.get(uuid);
+
+        if (previous) {
+            const wentDown = raidColumns.some((col, i) => raidCounts[i] < previous[col]) || total < previous.total;
+
+            if (wentDown) {
+                console.warn(`Reusing previous snapshot for ${uuid}: new counts lower than previous`, {
+                    previous: { ...previous },
+                    incoming: { raidCounts, total }
+                });
+                raidColumns.forEach((col, i) => { raidCounts[i] = previous[col]; });
+                total = previous.total;
+            }
+        }
+
         await insertRaidSnapshot(uuid, raidCounts, total, capturedAt);
     }
 }
