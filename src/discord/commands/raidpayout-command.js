@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getPlayerUsername, getPlayersByGuild, getRaidsDiff } = require("../../core/database");
+const { getPlayerUsername, getPlayersByGuild, getGuildRaids } = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 const {getGuildCache} = require("../../features/player/guild-cache");
 const { rankService } = require("../../features/ranks/rank-service");
@@ -161,7 +161,7 @@ module.exports = {
             const { startTimestamp, endTimestamp } = calculateResetRange();
             console.log(`Calculating raid payouts from ${startTimestamp} to ${endTimestamp}`);
 
-            const raidDiffs = await getRaidsDiff(startTimestamp, endTimestamp);
+            const raidDiffs = await getGuildRaids(null, startTimestamp, endTimestamp);
             const raidDiffMap = new Map(raidDiffs.map(row => [row.uuid, row.total]));
 
             const membersWithRaids = processedMembers.map(member => ({

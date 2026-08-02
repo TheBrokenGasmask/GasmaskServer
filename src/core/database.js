@@ -583,7 +583,7 @@ async function getOwedAspects() {
             if (!needsAspects) continue;
 
             let aspects = await getAspects(uuid);
-            const rows = await getLatestGuildRaids(uuid);
+            const rows = await getGuildRaids(uuid, null, null);
             const raids = rows.length ? rows[0] : null;
             if (!raids) continue; // ✅ skip players with no raid data yet
             let totalAspects = aspects.length;
@@ -609,50 +609,6 @@ async function getOwedAspects() {
     return [];
 }
 
-async function getRaidLeaderboard(raid, timestamp = null) {
-    try {
-        const raidColumn = raid === -1 ? 'total' : `raid${raid}`;
-
-        let query;
-        let params;
-
-        if (timestamp) {
-            // diff between closest snapshot to timestamp and latest
-            query = `
-                SELECT
-                    a.uuid,
-                    (a.${raidColumn} - COALESCE(b.${raidColumn}, 0)) as raidCount
-                FROM guild_raids a
-                LEFT JOIN guild_raids b
-                    ON a.uuid = b.uuid
-                    AND b.captured_at = (
-                        SELECT MAX(captured_at) FROM guild_raids
-                        WHERE captured_at <= ?
-                        AND uuid = a.uuid
-                    )
-                WHERE a.captured_at = (SELECT MAX(captured_at) FROM guild_raids)
-                HAVING raidCount > 0
-                ORDER BY raidCount DESC
-            `;
-            params = [timestamp];
-        } else {
-            query = `
-                SELECT uuid, ${raidColumn} as raidCount
-                FROM guild_raids
-                WHERE captured_at = (SELECT MAX(captured_at) FROM guild_raids)
-                HAVING raidCount > 0
-                ORDER BY raidCount DESC
-            `;
-            params = [];
-        }
-
-        const [rows] = await pool.query(query, params);
-        return new Map(rows.map(row => [row.uuid, row.raidCount]));
-    } catch (err) {
-        console.error('Error getting leaderboard:', err);
-        return new Map();
-    }
-}
 
 async function getWarLeaderboard(difficultyIndex, timestamp = null) {
     const {warService} = require("../features/wars/report-war-endpoint");
@@ -1501,48 +1457,9 @@ async function saveApplicationResumeData(applicationId, data) {
     }
 }
 
-async function getLatestGuildRaids(uuid = null, fromTimestamp = null) {
-    try {
-        if (fromTimestamp) {
-            // diff between closest snapshot to fromTimestamp and latest
-            const [rows] = await pool.query(`
-                SELECT 
-                    a.uuid,
-                    (a.raid0 - COALESCE(b.raid0, 0)) as raid0,
-                    (a.raid1 - COALESCE(b.raid1, 0)) as raid1,
-                    (a.raid2 - COALESCE(b.raid2, 0)) as raid2,
-                    (a.raid3 - COALESCE(b.raid3, 0)) as raid3,
-                    (a.raid4 - COALESCE(b.raid4, 0)) as raid4,
-                    (a.total - COALESCE(b.total, 0)) as total
-                FROM guild_raids a
-                LEFT JOIN guild_raids b
-                    ON a.uuid = b.uuid
-                    AND b.captured_at = (
-                        SELECT MAX(captured_at) FROM guild_raids
-                        WHERE captured_at <= ?
-                        ${uuid ? 'AND uuid = ?' : ''}
-                    )
-                WHERE a.captured_at = (SELECT MAX(captured_at) FROM guild_raids)
-                ${uuid ? 'AND a.uuid = ?' : ''}
-            `, uuid ? [fromTimestamp, uuid, uuid] : [fromTimestamp]);
-            return rows;
-        }
+async function getGuildRaids(uuid = null, startTimestamp = null, endTimestamp = null) {
 
-        const [rows] = await pool.query(`
-            SELECT uuid, raid0, raid1, raid2, raid3, raid4, total
-            FROM guild_raids
-            WHERE captured_at = (SELECT MAX(captured_at) FROM guild_raids)
-            ${uuid ? 'AND uuid = ?' : ''}
-            ORDER BY total DESC
-        `, uuid ? [uuid] : []);
-        return rows;
-    } catch (err) {
-        console.error('Error fetching latest guild raids:', err);
-        return [];
-    }
-}
 
-async function getRaidsDiff(startTimestamp, endTimestamp) {
     try {
         const [[{ endTs }]] = await pool.query(
             `SELECT MAX(captured_at) as endTs FROM guild_raids WHERE captured_at <= ?`,
@@ -1553,8 +1470,26 @@ async function getRaidsDiff(startTimestamp, endTimestamp) {
             [startTimestamp]
         );
 
-        if (!endTs) return [];
-
+        
+        if (!startTs && !endTs) {
+            //grabs latest
+            const [rows] = await pool.query(`
+                SELECT uuid, raid0, raid1, raid2, raid3, raid4, total
+                FROM guild_raids
+                WHERE captured_at = (SELECT MAX(captured_at) FROM guild_raids)
+                ${uuid ? 'AND uuid = ?' : ''}
+                ORDER BY total DESC
+            `, uuid ? [uuid] : []);
+            return rows;
+        }
+        
+        if(uuid) {
+        //grabs between time periodes
+        const params = [];
+            if(startTs) params.push(startTs);
+            if(endTs) params.push(endTs);
+            if(uuid) params.push(uuid);
+        
         const [rows] = await pool.query(`
             SELECT
                 a.uuid,
@@ -1567,22 +1502,28 @@ async function getRaidsDiff(startTimestamp, endTimestamp) {
             FROM guild_raids a
             LEFT JOIN guild_raids b
                 ON a.uuid = b.uuid
-                AND b.captured_at = ?
+                AND b.captured_at = (
+                    SELECT MAX(captured_at) FROM guild_raids
+                    WHERE captured_at <= ?
+                )
             WHERE a.captured_at = ?
+            ${uuid ? 'AND a.uuid = ?' : ''}
             HAVING total > 0
             ORDER BY total DESC
-        `, [startTs, endTs]);
+            `, params);
+            
 
-        return rows;
-    } catch (err) {
-        console.error('Error getting raids diff:', err);
-        return [];
+            return rows
+
     }
+    } catch (err) {
+        console.error('Error fetching latest guild raids:', err);
+    }
+    
 }
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
-    getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getRaidLeaderboard, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
+    getPlayerUsername, insertPlayer, getRaids, getWars, getRaidCount, getAspects, getOwedAspects, getWarLeaderboard, updateGuild, updateUsername, getPlayers, getPlayersByGuild, getGuild, toggleNeedsAspects,
     createAccountLink, verifyAccountLink, getAccountLink, getAccountLinkByMinecraft, getPlayerByUUID, removeAccountLink, removeAccountLinkByMinecraft, getUnverifiedAccountLink, cleanupExpiredLinks, getPlayersWithVerifiedLinks, getAccountLinksForPlayers, getPlayerByDiscordId,
     setTrackerEnabled, getEnabledChannelsForTracker, insertTerritoryEvent, insertMemberEvent, getTrackerState, saveTrackerMessage, getTrackerMessage, createApplication, setApplicationMessageIds, getApplicationByThread,
-    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData, updateApplicationIgn,insertRaidSnapshot,
-    getLatestGuildRaids, getRaidsDiff, getPlayerByUUID};
+    getApplicationById, upsertVote, getVotes, setApplicationStatus, getApplicationByReviewMessage, deleteTrackerMessage, getPendingApplications, saveApplicationAnswers, saveApplicationResumeData, updateApplicationIgn,insertRaidSnapshot, getPlayerByUUID, getGuildRaids};

@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, AttachmentBuilder } = require("discord.js");
-const { getLatestGuildRaids, getPlayerUsername, getPlayerUUID } = require("../../core/database");
+const { getGuildRaids, getPlayerUsername, getPlayerUUID } = require("../../core/database");
 const { createRaidCard } = require("../../discord/image-generation/raids-card");
 const { daysToTimestamp } = require("../../core/utilities");
 
@@ -28,7 +28,7 @@ module.exports = {
             return;
         }
 
-        const rows = await getLatestGuildRaids(uuid, days ? daysToTimestamp(days) : null);
+        const rows = await getGuildRaids(uuid, days ? daysToTimestamp(days) : null, null);
 
         if (!rows.length) {
             await interaction.editReply(`No raid data found for ${playerName}.`);

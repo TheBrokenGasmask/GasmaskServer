@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, AttachmentBuilder } = require("discord.js");
-const {getPlayerUUID, getLatestGuildRaids, getPlayerUsername, getAspects, getGuild, getPlayerByUUID} = require("../../core/database");
+const {getPlayerUUID, getGuildRaids, getPlayerUsername, getAspects, getGuild, getPlayerByUUID} = require("../../core/database");
 const { config } = require("../../core/config");
 const {createAspectsCard} = require("../../discord/image-generation/aspects-card");
 
@@ -30,8 +30,7 @@ module.exports = {
         playerName = await getPlayerUsername(uuid);
 
         let aspectData = await getAspects(uuid);
-        //let raidData = await getLatestGuildRaids(uuid);
-        const rows = await getLatestGuildRaids(uuid);
+        const rows = await getGuildRaids(uuid, null, null);
         const raidData = rows.length ? rows[0] : null;
         let playerData = await getPlayerByUUID(uuid);
         console.log('aspectData:', aspectData);
