@@ -1458,8 +1458,6 @@ async function saveApplicationResumeData(applicationId, data) {
 }
 
 async function getGuildRaids(uuid = null, startTimestamp = null, endTimestamp = null) {
-
-
     try {
         const [[{ endTs }]] = await pool.query(
             `SELECT MAX(captured_at) as endTs FROM guild_raids WHERE captured_at <= ?`,
@@ -1470,9 +1468,8 @@ async function getGuildRaids(uuid = null, startTimestamp = null, endTimestamp = 
             [startTimestamp]
         );
 
-        
         if (!startTs && !endTs) {
-            //grabs latest
+            // grabs latest
             const [rows] = await pool.query(`
                 SELECT uuid, raid0, raid1, raid2, raid3, raid4, total
                 FROM guild_raids
@@ -1482,14 +1479,13 @@ async function getGuildRaids(uuid = null, startTimestamp = null, endTimestamp = 
             `, uuid ? [uuid] : []);
             return rows;
         }
-        
-        if(uuid) {
-        //grabs between time periodes
+
+        // grabs between time periods (uuid optional)
         const params = [];
-            if (startTs) params.push(startTs);
-            if (endTs) params.push(endTs);
-            if (uuid) params.push(uuid);
-        
+        if (startTs) params.push(startTs);
+        if (endTs) params.push(endTs);
+        if (uuid) params.push(uuid);
+
         const [rows] = await pool.query(`
             SELECT
                 a.uuid,
@@ -1511,15 +1507,12 @@ async function getGuildRaids(uuid = null, startTimestamp = null, endTimestamp = 
             HAVING total > 0
             ORDER BY total DESC
         `, params);
-            
 
-            return rows
-
-    }
+        return rows;
     } catch (err) {
         console.error('Error fetching latest guild raids:', err);
+        return [];
     }
-    
 }
 
 module.exports = { databaseInit, insertRaid, insertWar, insertAspect, getGXPLeaderboard, getPlayerUUID,
