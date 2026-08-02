@@ -3,7 +3,7 @@ const {getToken} = require("../auth/authentication");
 const {requestUUID} = require("../../core/utilities");
 const {getMemberByUuid} = require('../player/guild-cache');
 const { getWynnGuild } = require("../player/wynn-api");
-const { insertRaidSnapshot } = require("../../core/database");
+const { insertRaidSnapshot, getGuildRaids } = require("../../core/database");
 const {raids} = require("../../core/utilities");
 
 let discordClient = null;
