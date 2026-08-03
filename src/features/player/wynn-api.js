@@ -122,7 +122,7 @@ async function getPlayerGuild(uuid) {
 
 async function getPlayerGuildInfo(uuid) {
     console.log(`[getPlayerGuildInfo] Called for ${uuid}`);
-    console.trace(); // ✅ prints the full call stack
+    //console.trace(); // ✅ prints the full call stack
     try {
         let player = await getWynnUser(uuid);
         if (!player.guild || player.guild === "NULL") return { guild: null, guildRank: null };
