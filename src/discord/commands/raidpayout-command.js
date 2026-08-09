@@ -87,7 +87,7 @@ module.exports = {
 
         
             const ignoredUuids = new Set([
-                ''
+                '497f38f5-14ae-4eff-842a-64deb8c34ccf'
             ]);
 
             const processedMembers = [];
