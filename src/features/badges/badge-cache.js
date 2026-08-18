@@ -1,4 +1,4 @@
-const {getRaidLeaderboard} = require("../../core/database");
+const { getGuildRaids } = require("../../core/database");
 
 class BadgeCacheService {
     constructor() {
@@ -34,53 +34,60 @@ class BadgeCacheService {
      * Update badge cache
      */
     async updateCache() {
-        if (this.isCalculating) return;
+    if (this.isCalculating) return;
 
-        this.isCalculating = true;
-        try {
-            console.log('Updating badge cache...');
-            const shadowPlayerBadgeCache = new Map();
-            const shadowLeaderboardCache = new Map();
+    this.isCalculating = true;
+    try {
+        console.log('Updating badge cache...');
+        const shadowPlayerBadgeCache = new Map();
+        const shadowLeaderboardCache = new Map();
 
-            const addPlayerBadgeToCache = (uuid, badgeId) => {
-                if (!shadowPlayerBadgeCache.has(uuid)) {
-                    shadowPlayerBadgeCache.set(uuid, []);
-                }
-                const playerBadges = shadowPlayerBadgeCache.get(uuid);
-                if (!playerBadges.includes(badgeId)) {
-                    playerBadges.push(badgeId);
-                }
-            };
-            
-            // Process each raid leaderboard
-            for (let raidId = -1; raidId <= 3; raidId++) {
-                try {
-                    const leaderboard = await getRaidLeaderboard(raidId);
-                    const leaderboardArray = Array.from(leaderboard.keys());
-                    shadowLeaderboardCache.set(raidId, leaderboardArray);
-                    
-                    // Top 3 for each raid
-                    for (let position = 0; position < 3 && position < leaderboardArray.length; position++) {
-                        const uuid = leaderboardArray[position];
-                        if (uuid) {
-                            addPlayerBadgeToCache(uuid, this.getRaidBadgeId(raidId, position + 1));
-                        }
-                    }
-                } catch (error) {
-                    console.error(`Error caching leaderboard for raid ${raidId}:`, error);
-                }
+        const addPlayerBadgeToCache = (uuid, badgeId) => {
+            if (!shadowPlayerBadgeCache.has(uuid)) {
+                shadowPlayerBadgeCache.set(uuid, []);
             }
+            const playerBadges = shadowPlayerBadgeCache.get(uuid);
+            if (!playerBadges.includes(badgeId)) {
+                playerBadges.push(badgeId);
+            }
+        };
 
-            this.playerBadgeCache = shadowPlayerBadgeCache;
-            this.leaderboardCache = shadowLeaderboardCache;
-            
-            console.log('Badge cache updated successfully');
-        } catch (error) {
-            console.error('Error updating badge cache:', error);
-        } finally {
-            this.isCalculating = false;
+        const rows = await getGuildRaids(null, null, null); // raw-latest branch
+
+        // Process each raid leaderboard
+        for (let raidId = -1; raidId <= 3; raidId++) {
+            try {
+                const raidColumn = raidId === -1 ? 'total' : `raid${raidId}`;
+
+                const leaderboardArray = rows
+                    .filter(row => row[raidColumn] > 0)
+                    .sort((a, b) => b[raidColumn] - a[raidColumn])
+                    .map(row => row.uuid);
+
+                shadowLeaderboardCache.set(raidId, leaderboardArray);
+
+                // Top 3 for each raid
+                for (let position = 0; position < 3 && position < leaderboardArray.length; position++) {
+                    const uuid = leaderboardArray[position];
+                    if (uuid) {
+                        addPlayerBadgeToCache(uuid, this.getRaidBadgeId(raidId, position + 1));
+                    }
+                }
+            } catch (error) {
+                console.error(`Error caching leaderboard for raid ${raidId}:`, error);
+            }
         }
+
+        this.playerBadgeCache = shadowPlayerBadgeCache;
+        this.leaderboardCache = shadowLeaderboardCache;
+
+        console.log('Badge cache updated successfully');
+    } catch (error) {
+        console.error('Error updating badge cache:', error);
+    } finally {
+        this.isCalculating = false;
     }
+}
 
 
     /**

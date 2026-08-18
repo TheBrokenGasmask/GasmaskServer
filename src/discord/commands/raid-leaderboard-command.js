@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getPlayerUsername, getRaidLeaderboard} = require("../../core/database");
+const { getPlayerUsername, getGuildRaids} = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 
 module.exports = {
@@ -32,34 +32,41 @@ module.exports = {
 
         const period = interaction.options.getString('period') || 'all';
         let days = interaction.options.getString('days');
-        let timestamp;
+        let startTimestamp = null;
+        let endTimestamp = null;
         let periodDescription;
 
         if (period === 'thisweek') {
-            timestamp = getLastPoolReset()
+            startTimestamp = getLastPoolReset()
             periodDescription = 'This Week';
         } else if (period === 'lastweek') {
-            timestamp = getLastPoolReset(1);
+            startTimestamp = getLastPoolReset(1);
+            endTimestamp = getLastPoolReset()
             periodDescription = 'Last Week';
         } else if (period === 'custom' && days) {
             days = parseInt(days);
-            timestamp = daysToTimestamp(days);
+            startTimestamp = daysToTimestamp(days);
             periodDescription = `Last ${days} Day${days !== 1 ? "s" : ""}`;
-        } else {
-            timestamp = daysToTimestamp(-1);
-            periodDescription = 'All Time';
         }
 
         let raid = interaction.options.getString('type');
         raid = parseInt(raid);
+        
+        const raidColumn = raid === -1 ? 'total' : `raid${raid}`;
 
-        let leaderData = await getRaidLeaderboard(raid, timestamp);
-        let fields = [];
+        const rows = await getGuildRaids(null, startTimestamp, endTimestamp);
 
-        for (const [uuid, raidCount] of leaderData) {
-            let playerName = await getPlayerUsername(uuid);
-            fields.push({ name: playerName, value: `\`\`\`${raidCount}\`\`\``});
-        }
+        const leaderData = rows
+            .map(row => ({ uuid: row.uuid, raidCount: row[raidColumn] }))
+            .filter(row => row.raidCount > 0)
+            .sort((a, b) => b.raidCount - a.raidCount);
+
+        const fields = await Promise.all(
+            leaderData.map(async ({ uuid, raidCount }) => {
+                const playerName = await getPlayerUsername(uuid);
+                return { name: playerName, value: `\`\`\`${raidCount}\`\`\`` };
+            })
+        );
 
         const itemsPerPage = 10;
         const totalPages = Math.ceil(fields.length / itemsPerPage);

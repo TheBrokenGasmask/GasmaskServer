@@ -1,5 +1,5 @@
-const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-const { getPlayerUsername, getPlayersByGuild, getRaidsDiff } = require("../../core/database");
+const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, inlineCode } = require("discord.js");
+const { getPlayerUsername, getPlayersByGuild, getGuildRaids } = require("../../core/database");
 const {raids, daysToTimestamp, getLastPoolReset} = require("../../core/utilities");
 const {getGuildCache} = require("../../features/player/guild-cache");
 const { rankService } = require("../../features/ranks/rank-service");
@@ -87,8 +87,7 @@ module.exports = {
 
         
             const ignoredUuids = new Set([
-                '98a68661-40ca-41f2-a1c9-fc365c8732f4',
-                'e412513d-6623-4837-9888-0439fc3f565f'
+                '497f38f5-14ae-4eff-842a-64deb8c34ccf'
             ]);
 
             const processedMembers = [];
@@ -161,7 +160,7 @@ module.exports = {
             const { startTimestamp, endTimestamp } = calculateResetRange();
             console.log(`Calculating raid payouts from ${startTimestamp} to ${endTimestamp}`);
 
-            const raidDiffs = await getRaidsDiff(startTimestamp, endTimestamp);
+            const raidDiffs = await getGuildRaids(null, startTimestamp, endTimestamp);
             const raidDiffMap = new Map(raidDiffs.map(row => [row.uuid, row.total]));
 
             const membersWithRaids = processedMembers.map(member => ({
@@ -226,7 +225,7 @@ module.exports = {
 
             const memberPayouts = membersWithFinalPayouts
                 .filter(member => member.raidCount >= 10)
-                .map(member => `${member.username} - ${member.totalLE}le`)
+                .map(member => inlineCode(`${member.username} - ${member.totalLE}le`))
                 .join('\n');
 
             const topUuids = top3Raiders.map(member => member.uuid);
