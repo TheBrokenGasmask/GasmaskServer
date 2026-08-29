@@ -268,12 +268,12 @@ async function runApplicationQuestions(thread, member, type, applicationId, resu
             'Are you interested in participating in guild warring? If so, rate from 1-10',
             'What languages do you speak?',
             'Are there any things done by people online that may irritate you? (i.e pet peeve)',
-            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
+            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing) (respond with "I accept" to confirm )',
         ] : type === 'veteran' ? [
             'Why did you leave the guild?',
             'Why do you want to return?',
             'What is your reason for joining and how will you contribute to the guild?',
-            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing)',
+            'Please accept our rules in [rules](https://discord.com/channels/983006019850469406/1211390009916264509) as well as Our [Guild Rules](https://docs.google.com/document/d/1RT4Uz0gEzVwFuJ9nZP4sd2tXEhI99j7aAB_cuwQAGFU/edit?usp=sharing) (respond with "I accept" to confirm)',
         ] : [
             'Why do you feel you deserve a promotion?',
             'What are your recent achievements?',
