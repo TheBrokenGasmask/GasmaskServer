@@ -1,0 +1,50 @@
+{{- if .Values.ingress.enabled }}
+{{- $fullName := include "wynn-tracker-server.fullname" . -}}
+{{- $hosts := include "wynn-tracker-server.hosts" . | fromJsonArray -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "wynn-tracker-server.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.ingress.websocket.enabled }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.websocket.readTimeout | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.websocket.sendTimeout | quote }}
+    {{- end }}
+    {{- if and (include "wynn-tracker-server.certManagerEnabled" .) (not .Values.certManager.createCertificate) }}
+    {{- if eq .Values.certManager.issuerKind "ClusterIssuer" }}
+    cert-manager.io/cluster-issuer: {{ include "wynn-tracker-server.issuerName" . }}
+    {{- else }}
+    cert-manager.io/issuer: {{ include "wynn-tracker-server.issuerName" . }}
+    {{- end }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if include "wynn-tracker-server.tlsEnabled" . }}
+  tls:
+    - hosts:
+        {{- range $hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ include "wynn-tracker-server.tlsSecretName" . }}
+  {{- end }}
+  rules:
+    {{- range $hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: {{ $.Values.ingress.path }}
+            pathType: {{ $.Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  name: http
+    {{- end }}
+{{- end }}

@@ -68,6 +68,27 @@
    
 ---
 
+## Deploying to Kubernetes (optional)
+
+Running the server with `npm run start` as described above needs nothing from
+this section.
+
+A Helm chart is available in [`deploy/helm/wynn-tracker-server`](deploy/helm/wynn-tracker-server),
+with a `Dockerfile` at the repo root. It renders `config.json` into a Secret,
+exposes the API and the `/ws` WebSocket through an ingress, and can obtain and
+auto-renew a Let's Encrypt certificate via cert-manager.
+
+```bash
+docker build -t wynn-tracker-server:latest .
+helm install wynn-tracker deploy/helm/wynn-tracker-server \
+  --namespace wynntracker --create-namespace --values my-values.yaml
+```
+
+See the [chart README](deploy/helm/wynn-tracker-server/README.md) for
+configuration and TLS options.
+
+---
+
 ## Usage
 Have members of your guild use the **WynnTracker Mod** to relay information to the server.
 
