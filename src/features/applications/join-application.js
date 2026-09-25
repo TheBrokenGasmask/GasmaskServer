@@ -4,7 +4,7 @@ const {createApplication, setApplicationMessageIds, getApplicationByThread, getA
 const { config } = require('../../core/config');
 const { requestUUID } = require('../../core/utilities');
 
-const MINIMUM_LEVEL = config.get('votesystem.required-level') ?? 100;
+const MINIMUM_LEVEL = 85;
 const REQUIRED_VOTES = config.get('votesystem.required-votes') ?? 1;
 // --- Helpers ---
 
