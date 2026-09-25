@@ -1,0 +1,144 @@
+image:
+  repository: wynn-tracker-server
+  tag: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Not horizontally scalable: auth tokens are in-memory and the Discord bot
+# opens one gateway connection. Values above 1 are rejected.
+replicaCount: 1
+
+# Rendered verbatim into /app/config.json, with `secrets` merged on top.
+config:
+  clientId: ""
+  guild-tag: "TBGM"
+  minimum-rank: 2
+  minimum-client-threshold: 2
+  # Also used as the container port, Service targetPort and probe port.
+  host-port: 8080
+  account-linking:
+    required-role-id: ""
+    linked-role-id: ""
+    verification-expiry-minutes: 15
+  sql:
+    host: ""
+    user: "wynntracker"
+    database: "wynntracker"
+  chat-bridge:
+    enabled: false
+    webhook-url: ""
+    channel-id: ""
+  votesystem:
+    required-votes: 3
+    review-channel-id: ""
+    ticket-access-roles: []
+    required-level: 110
+  alert-command:
+    required-role-id: ""
+  ranks: {}
+
+# Merged into config.json and stored in a Secret. Pass with --set-string.
+secrets:
+  discordToken: ""      # -> token
+  wynncraftToken: ""    # -> wynncraft-token
+  sqlPassword: ""       # -> sql.password
+  chatBridgeWebhookUrl: ""
+
+# Mount a Secret you manage instead. Note: config.host-port must still be set
+# here to match it, since the chart cannot read an external Secret.
+existingSecret: ""
+existingSecretKey: "config.json"
+
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: traefik
+  host: ""
+  path: /
+  pathType: Prefix
+  annotations: {}
+  extraHosts: []
+  # ingress-nginx only; Traefik ignores these and needs no equivalent, as the
+  # app's 30s heartbeat keeps connections under Traefik's 180s idle timeout.
+  websocket:
+    enabled: false
+    readTimeout: 3600
+    sendTimeout: 3600
+  tls:
+    enabled: true
+    # cert-manager | existing | none
+    mode: cert-manager
+    secretName: ""
+
+certManager:
+  createIssuer: true
+  issuerKind: ClusterIssuer
+  issuerName: ""
+  email: ""
+  server: https://acme-v02.api.letsencrypt.org/directory
+  solver: http01
+  dns01: {}
+  createCertificate: false
+  certificate:
+    duration: ""
+    renewBefore: ""
+  # Verifies the CRDs exist. It cannot verify the cert-manager controller is
+  # actually running, so check that separately if certificates never issue.
+  checkCrds: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 1Gi
+
+# TCP because the app has no health endpoint and binds its port before the
+# database is up. A ready pod is not proof the app is working.
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 30
+    periodSeconds: 20
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 3
+  startup:
+    enabled: true
+    periodSeconds: 5
+    failureThreshold: 30
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+env: []
+envFrom: []
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+terminationGracePeriodSeconds: 30

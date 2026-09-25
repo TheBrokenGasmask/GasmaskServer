@@ -1,0 +1,67 @@
+{{ .Chart.Name }} has been deployed as release {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+Watch it come up:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "wynn-tracker-server.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "wynn-tracker-server.fullname" . }}
+
+{{- if .Values.ingress.enabled }}
+
+Reachable at:
+{{- $scheme := ternary "https" "http" (not (empty (include "wynn-tracker-server.tlsEnabled" .))) }}
+{{- range (include "wynn-tracker-server.hosts" . | fromJsonArray) }}
+  {{ $scheme }}://{{ . }}/api        (HTTP API)
+  {{ ternary "wss" "ws" (eq $scheme "https") }}://{{ . }}/ws          (mod WebSocket)
+{{- end }}
+
+Point the WynnTracker mod's in-game server setting at the URL above.
+{{- if include "wynn-tracker-server.certManagerEnabled" . }}
+
+TLS is being issued by cert-manager from {{ .Values.certManager.server }}.
+Track the certificate:
+  kubectl -n {{ .Release.Namespace }} get certificate,certificaterequest,order,challenge
+  kubectl -n {{ .Release.Namespace }} describe certificate {{ if .Values.certManager.createCertificate }}{{ include "wynn-tracker-server.fullname" . }}{{ else }}{{ include "wynn-tracker-server.tlsSecretName" . }}{{ end }}
+
+A certificate usually appears within a minute. If it stays pending, the
+challenge is the thing to look at:
+{{- if eq .Values.certManager.solver "http01" }}
+  - {{ .Values.ingress.host }} must resolve to this cluster's ingress IP
+  - port 80 must be reachable publicly (the HTTP-01 challenge is served there,
+    even though the site itself redirects to HTTPS)
+{{- else }}
+  - the dns01 credentials must be able to write TXT records for the zone
+{{- end }}
+
+Rate limits are strict on production Let's Encrypt. While iterating, use:
+  --set certManager.server=https://acme-staging-v02.api.letsencrypt.org/directory
+{{- else if eq .Values.ingress.tls.mode "existing" }}
+
+TLS uses the pre-existing Secret {{ include "wynn-tracker-server.tlsSecretName" . }}.
+Renewing it (e.g. after a certbot run) is on you:
+  kubectl -n {{ .Release.Namespace }} create secret tls {{ include "wynn-tracker-server.tlsSecretName" . }} \
+    --cert=fullchain.pem --key=privkey.pem --dry-run=client -o yaml | kubectl apply -f -
+{{- else }}
+
+TLS is not being terminated by this ingress (ingress.tls.mode={{ .Values.ingress.tls.mode }}).
+{{- end }}
+{{- else }}
+
+No ingress was created. Reach the server locally with:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "wynn-tracker-server.fullname" . }} 8080:{{ .Values.service.port }}
+
+Set ingress.enabled=true to expose it publicly with TLS.
+{{- end }}
+
+{{- if .Values.existingSecret }}
+
+Config comes from the existing Secret {{ .Values.existingSecret }} (key {{ .Values.existingSecretKey }}).
+Edits to it need a manual restart:
+  kubectl -n {{ .Release.Namespace }} rollout restart deploy/{{ include "wynn-tracker-server.fullname" . }}
+{{- else }}
+{{- if not .Values.secrets.discordToken }}
+
+WARNING: secrets.discordToken is empty, so the Discord bot will fail to log in.
+{{- end }}
+{{- if not (index .Values.config "sql" "host") }}
+WARNING: config.sql.host is empty; the server cannot reach a database.
+{{- end }}
+{{- end }}

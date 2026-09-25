@@ -1,0 +1,25 @@
+{{- if and (include "wynn-tracker-server.certManagerEnabled" .) .Values.certManager.createCertificate }}
+{{- $hosts := include "wynn-tracker-server.hosts" . | fromJsonArray -}}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "wynn-tracker-server.fullname" . }}
+  labels:
+    {{- include "wynn-tracker-server.labels" . | nindent 4 }}
+spec:
+  secretName: {{ include "wynn-tracker-server.tlsSecretName" . }}
+  {{- with .Values.certManager.certificate.duration }}
+  duration: {{ . }}
+  {{- end }}
+  {{- with .Values.certManager.certificate.renewBefore }}
+  renewBefore: {{ . }}
+  {{- end }}
+  dnsNames:
+    {{- range $hosts }}
+    - {{ . | quote }}
+    {{- end }}
+  issuerRef:
+    name: {{ include "wynn-tracker-server.issuerName" . }}
+    kind: {{ .Values.certManager.issuerKind }}
+    group: cert-manager.io
+{{- end }}

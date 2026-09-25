@@ -1,0 +1,28 @@
+{{- if and (include "wynn-tracker-server.certManagerEnabled" .) .Values.certManager.createIssuer }}
+apiVersion: cert-manager.io/v1
+kind: {{ .Values.certManager.issuerKind }}
+metadata:
+  name: {{ include "wynn-tracker-server.issuerName" . }}
+  {{- if eq .Values.certManager.issuerKind "Issuer" }}
+  namespace: {{ .Release.Namespace }}
+  {{- end }}
+  labels:
+    {{- include "wynn-tracker-server.labels" . | nindent 4 }}
+spec:
+  acme:
+    server: {{ .Values.certManager.server }}
+    email: {{ .Values.certManager.email }}
+    privateKeySecretRef:
+      name: {{ include "wynn-tracker-server.issuerName" . }}-account-key
+    solvers:
+      {{- if eq .Values.certManager.solver "http01" }}
+      - http01:
+          ingress:
+            {{- with .Values.ingress.className }}
+            ingressClassName: {{ . }}
+            {{- end }}
+      {{- else }}
+      - dns01:
+          {{- toYaml .Values.certManager.dns01 | nindent 10 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "wynn-tracker-server.fullname" . }}-test
+  labels:
+    {{- include "wynn-tracker-server.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: hook-succeeded
+spec:
+  restartPolicy: Never
+  containers:
+    - name: probe
+      image: curlimages/curl:8.10.1
+      # The endpoint answers 4xx without auth params; only a connection failure fails.
+      args:
+        - -sS
+        - -o
+        - /dev/null
+        - -w
+        - "%{http_code}\n"
+        - --max-time
+        - "10"
+        - http://{{ include "wynn-tracker-server.fullname" . }}:{{ .Values.service.port }}/api/is-authenticated

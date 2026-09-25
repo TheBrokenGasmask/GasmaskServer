@@ -1,0 +1,8 @@
+node_modules
+.git
+.idea
+.claude
+.DS_Store
+config.json
+deploy
+README.md
