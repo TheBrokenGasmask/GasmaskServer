@@ -1,0 +1,58 @@
+# Credentials for .github/workflows/build-image.yml's deploy job.
+#
+# Scoped deliberately tightly: this token can roll the one Deployment and watch
+# the result, and nothing else. It cannot read Secrets (so not config.json, the
+# Discord token or the SQL password), touch other namespaces, or create
+# workloads. Worst case for a leaked token is a restart of an app that is
+# already restarted by every push.
+#
+# Apply with:
+#   kubectl apply -f deploy/k8s/ci-deployer.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-deployer
+  namespace: wynntracker
+---
+# A non-expiring token. Since 1.24 these are not created automatically, and
+# `kubectl create token` mints a bounded one the API server may cap at a year,
+# which would silently break deploys later. CI needs one that does not expire.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ci-deployer-token
+  namespace: wynntracker
+  annotations:
+    kubernetes.io/service-account.name: ci-deployer
+type: kubernetes.io/service-account-token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-deployer
+  namespace: wynntracker
+rules:
+  # `kubectl set image` -- restricted to the one Deployment by name.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["wynn-tracker-wynn-tracker-server"]
+    verbs: ["get", "patch"]
+  # `kubectl rollout status` watches. resourceNames cannot restrict list/watch,
+  # so this is namespace-wide -- read-only, and the namespace holds one app.
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deployer
+  namespace: wynntracker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ci-deployer
+subjects:
+  - kind: ServiceAccount
+    name: ci-deployer
+    namespace: wynntracker

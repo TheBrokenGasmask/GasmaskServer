@@ -85,6 +85,8 @@ jobs:
   merge:
     needs: build
     runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
     steps:
       - id: img
         run: echo "name=ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
@@ -121,6 +123,13 @@ jobs:
             $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf "${IMAGE}@sha256:%s " *)
 
+      # The immutable ref, so deploy pins a commit rather than chasing :latest.
+      # cut -c1-7 matches metadata-action's type=sha,format=short.
+      - id: ref
+        env:
+          IMAGE: ${{ steps.img.outputs.name }}
+        run: echo "image=${IMAGE}:sha-$(echo "$GITHUB_SHA" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
       - name: Inspect and summarise
         env:
           IMAGE: ${{ steps.img.outputs.name }}
@@ -139,5 +148,81 @@ jobs:
             echo
             echo '```bash'
             echo "kubectl -n wynntracker rollout restart deploy/wynn-tracker-wynn-tracker-server"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Rolls the cluster onto the image just built. Uses a ServiceAccount whose
+  # RBAC allows patching this one Deployment and nothing else --
+  # deploy/k8s/ci-deployer.yaml. Skipped automatically if the three secrets are
+  # absent, so the build half keeps working without cluster access configured.
+  deploy:
+    needs: merge
+    if: github.ref == 'refs/heads/tbgm'
+    runs-on: ubuntu-24.04
+    env:
+      NAMESPACE: wynntracker
+      DEPLOYMENT: deploy/wynn-tracker-wynn-tracker-server
+      CONTAINER: server
+      IMAGE: ${{ needs.merge.outputs.image }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.KUBE_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "KUBE_TOKEN is not set; skipping deploy." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write kubeconfig
+        if: steps.check.outputs.configured == 'true'
+        env:
+          SERVER: ${{ secrets.KUBE_SERVER }}
+          CA: ${{ secrets.KUBE_CA }}
+          TOKEN: ${{ secrets.KUBE_TOKEN }}
+        run: |
+          install -m 700 -d "$RUNNER_TEMP/kube"
+          umask 077
+          cat > "$RUNNER_TEMP/kube/config" <<EOF
+          apiVersion: v1
+          kind: Config
+          clusters:
+            - name: cluster
+              cluster:
+                server: ${SERVER}
+                certificate-authority-data: ${CA}
+          users:
+            - name: ci
+              user:
+                token: ${TOKEN}
+          contexts:
+            - name: ci
+              context:
+                cluster: cluster
+                user: ci
+                namespace: ${NAMESPACE}
+          current-context: ci
+          EOF
+          echo "KUBECONFIG=$RUNNER_TEMP/kube/config" >> "$GITHUB_ENV"
+
+      # set image, not rollout restart: this changes the pod spec, so the
+      # rollout is a real deployment and the cluster records which commit is
+      # live. `kubectl rollout undo` then rolls back.
+      - name: Roll out
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          kubectl -n "$NAMESPACE" set image "$DEPLOYMENT" "$CONTAINER=$IMAGE"
+          kubectl -n "$NAMESPACE" rollout status "$DEPLOYMENT" --timeout=5m
+
+      - name: Summarise
+        if: always() && steps.check.outputs.configured == 'true'
+        run: |
+          {
+            echo "### Deploy: ${{ job.status }}"
+            echo
+            echo '```'
+            echo "$IMAGE"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"

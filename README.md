@@ -90,11 +90,10 @@ helm install wynn-tracker deploy/helm/wynn-tracker-server \
   --namespace wynntracker --create-namespace --values my-values.yaml
 ```
 
-To deploy a commit after its build goes green:
-
-```bash
-kubectl -n wynntracker rollout restart deploy/wynn-tracker-wynn-tracker-server
-```
+Deploys are automatic: once the image is published the workflow rolls the
+cluster onto it and waits for the new pod to become ready, so a push to `tbgm`
+is the whole deployment process. See the chart README for the credentials this
+needs and how to roll back.
 
 See the [chart README](deploy/helm/wynn-tracker-server/README.md) for
 configuration and TLS options.

@@ -36,29 +36,56 @@ empty token and password.
 
 ## Updating
 
-Pushing to `tbgm` builds a new image and tags it `:latest`. It does **not**
-restart anything: Kubernetes has no reason to replace a running pod just
-because a tag it already resolved now points somewhere else. Deploying the new
-image is one command, once the Actions run is green:
+Pushing to `tbgm` deploys itself. `.github/workflows/build-image.yml` builds
+both architectures, publishes the manifest, then its `deploy` job pins the new
+immutable tag onto the running Deployment and waits for the rollout:
+
+```bash
+kubectl -n wynntracker set image deploy/wynn-tracker-wynn-tracker-server \
+  server=ghcr.io/thebrokengasmask/gasmaskserver:sha-1a2b3c4
+```
+
+`set image` rather than `rollout restart`, so the live spec records which commit
+is running and `kubectl rollout undo` is a real rollback. If the new pod fails
+to become ready within 5 minutes the workflow goes red, so a broken deploy is
+visible in the Actions tab rather than only in the cluster.
+
+`strategy: Recreate` means the old pod stops before the new one starts: a few
+seconds of downtime and one Discord gateway reconnect per deploy.
+
+### Credentials
+
+The `deploy` job authenticates as the `ci-deployer` ServiceAccount from
+[`deploy/k8s/ci-deployer.yaml`](../../k8s/ci-deployer.yaml), whose RBAC permits
+patching this one Deployment and watching rollouts — it cannot read Secrets, so
+the token grants no access to `config.json`, the Discord token or the SQL
+password. Apply it once, then set three repository secrets:
+
+| Secret | Value |
+| --- | --- |
+| `KUBE_SERVER` | API server URL, e.g. `https://<ip>:6443` |
+| `KUBE_CA` | cluster CA certificate, base64 (as stored in the token Secret) |
+| `KUBE_TOKEN` | the `ci-deployer` ServiceAccount token |
+
+With `KUBE_TOKEN` unset the `deploy` job skips itself and the build still runs,
+so the workflow is usable before the cluster side is wired up.
+
+### Rolling back
+
+```bash
+kubectl -n wynntracker rollout undo deploy/wynn-tracker-wynn-tracker-server
+```
+
+Note that CI pins a `sha-` tag directly on the Deployment, which the Helm
+release does not know about. A later `helm upgrade` resets the image to
+`:latest` — harmless, since `pullPolicy: Always` still fetches the newest
+build, but the recorded commit is lost until the next push re-pins it.
+
+Manual deploy, if CI is unavailable:
 
 ```bash
 kubectl -n wynntracker rollout restart deploy/wynn-tracker-wynn-tracker-server
 ```
-
-The pod restarts, re-pulls `:latest` (`image.pullPolicy: Always`) and comes up
-on the new code. `strategy: Recreate` means the old pod stops before the new one
-starts, so expect a few seconds of downtime and one Discord gateway reconnect.
-
-To roll back, pin the previous commit's tag instead of restarting:
-
-```bash
-helm upgrade wynn-tracker deploy/helm/wynn-tracker-server --reuse-values \
-  --set-string image.tag=sha-1a2b3c4
-```
-
-Because `:latest` is mutable, the deployed spec does not record which commit is
-running. `kubectl -n wynntracker describe pod -l app.kubernetes.io/name=wynn-tracker-server`
-shows the resolved image digest, which GHCR's package page maps back to a commit.
 
 ## Configuration
 

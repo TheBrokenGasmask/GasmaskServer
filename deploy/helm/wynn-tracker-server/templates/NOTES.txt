@@ -5,11 +5,11 @@ Watch it come up:
   kubectl -n {{ .Release.Namespace }} logs -f deploy/{{ include "wynn-tracker-server.fullname" . }}
 {{- if and (eq .Values.image.tag "latest") (eq .Values.image.pullPolicy "Always") }}
 
-Deploying a new build (after the Build image workflow goes green):
-  kubectl -n {{ .Release.Namespace }} rollout restart deploy/{{ include "wynn-tracker-server.fullname" . }}
+Deploys are automatic: a push to tbgm builds {{ .Values.image.repository }}
+and the workflow's deploy job rolls this Deployment onto it.
 
-A push to tbgm rebuilds {{ .Values.image.repository }}:latest but does not
-restart the pod. The restart above re-pulls it.
+To deploy by hand if CI is unavailable:
+  kubectl -n {{ .Release.Namespace }} rollout restart deploy/{{ include "wynn-tracker-server.fullname" . }}
 {{- end }}
 
 {{- if .Values.ingress.enabled }}
