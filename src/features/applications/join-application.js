@@ -4,7 +4,7 @@ const {createApplication, setApplicationMessageIds, getApplicationByThread, getA
 const { config } = require('../../core/config');
 const { requestUUID } = require('../../core/utilities');
 
-const MINIMUM_LEVEL = config.get('votesystem.required-level') ?? 100;
+const MINIMUM_LEVEL = 85;
 const REQUIRED_VOTES = config.get('votesystem.required-votes') ?? 1;
 // --- Helpers ---
 
@@ -404,7 +404,7 @@ async function handleApplicationButton(interaction, type) {
 
     await setApplicationMessageIds(applicationId, voteBarMsg.id, reviewMsg.id);
 
-    // Auto archive after 24 hours
+    // Auto archive after 240 hours
     setTimeout(async () => {
         const app = await getApplicationById(applicationId);
         if (app?.status === 'pending') {
@@ -413,12 +413,12 @@ async function handleApplicationButton(interaction, type) {
                 embeds: [new EmbedBuilder()
                     .setColor(0x888888)
                     .setTitle('🕐 Ticket Expired')
-                    .setDescription('This ticket has been automatically archived after 24 hours.')
+                    .setDescription('This ticket has been automatically archived after 240 hours.')
                 ]
             });
             await ticketThread.setArchived(true).catch(console.error);
         }
-    }, 24 * 60 * 60 * 1000);
+    }, 240 * 60 * 60 * 1000);
 }
 
 // --- Vote button handler ---
