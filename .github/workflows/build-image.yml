@@ -1,0 +1,143 @@
+name: Build image
+
+# Every push to tbgm rebuilds the container image and pushes it to GHCR as
+# :latest (plus an immutable :sha-<commit> tag for rollbacks). The cluster is
+# not touched from here -- the running pod picks up :latest on its next start,
+# see deploy/helm/wynn-tracker-server/README.md.
+#
+# linux/amd64 and linux/arm64 are built on native runners rather than under
+# QEMU: each arch runs at full speed, and `npm ci` resolves the matching
+# @napi-rs/canvas prebuild on the machine that will run it. The two per-arch
+# images are pushed by digest, then stitched into one multi-arch manifest by
+# the merge job, so the cluster pulls :latest and gets its own architecture.
+on:
+  push:
+    branches: [tbgm]
+  workflow_dispatch:
+
+# A newer commit makes an in-flight build pointless: :latest would end up
+# whichever build finished last, not whichever commit is newest.
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      # GHCR rejects uppercase paths, and the repo name has capitals.
+      - id: img
+        run: echo "name=ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - id: slug
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: echo "value=${PLATFORM//\//-}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # No tags here: each arch is pushed by digest only, and the merge job
+      # attaches the tags to the manifest list that points at both digests.
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          outputs: type=image,name=${{ steps.img.outputs.name }},push-by-digest=true,name-canonical=true,push=true
+          # Per-arch scope, or the two jobs overwrite each other's cache.
+          cache-from: type=gha,scope=${{ steps.slug.outputs.value }}
+          cache-to: type=gha,mode=max,scope=${{ steps.slug.outputs.value }}
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ steps.slug.outputs.value }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - id: img
+        run: echo "name=ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.img.outputs.name }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      # metadata-action exports DOCKER_METADATA_OUTPUT_JSON for the tag list.
+      - name: Create manifest list
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ steps.img.outputs.name }}
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "${IMAGE}@sha256:%s " *)
+
+      - name: Inspect and summarise
+        env:
+          IMAGE: ${{ steps.img.outputs.name }}
+        run: |
+          docker buildx imagetools inspect "${IMAGE}:latest"
+          {
+            echo "### Image pushed"
+            echo
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo
+            echo "Platforms: linux/amd64, linux/arm64"
+            echo
+            echo "Restart the pod to deploy it:"
+            echo
+            echo '```bash'
+            echo "kubectl -n wynntracker rollout restart deploy/wynn-tracker-wynn-tracker-server"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

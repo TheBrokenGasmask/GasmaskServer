@@ -1,7 +1,20 @@
 image:
-  repository: wynn-tracker-server
-  tag: ""
-  pullPolicy: IfNotPresent
+  # Built and pushed by .github/workflows/build-image.yml on every push to tbgm.
+  repository: ghcr.io/thebrokengasmask/gasmaskserver
+  # :latest tracks the newest build. To roll back, pin one of the immutable
+  # sha-<commit> tags the workflow also pushes. Leaving this empty would fall
+  # back to the chart's appVersion, which is not a tag that exists in GHCR.
+  tag: "latest"
+  # Always: a restarting pod must re-pull :latest rather than reuse the node's
+  # cached layer. The update flow does not work with IfNotPresent.
+  pullPolicy: Always
+
+# GHCR packages inherit the repository's visibility. While the repo is private,
+# the cluster needs a pull secret:
+#   kubectl -n wynntracker create secret docker-registry ghcr \
+#     --docker-server=ghcr.io --docker-username=<github-user> \
+#     --docker-password=<PAT with read:packages>
+# then set: imagePullSecrets: [{name: ghcr}]
 imagePullSecrets: []
 
 nameOverride: ""

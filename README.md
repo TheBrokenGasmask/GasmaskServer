@@ -78,10 +78,22 @@ with a `Dockerfile` at the repo root. It renders `config.json` into a Secret,
 exposes the API and the `/ws` WebSocket through an ingress, and can obtain and
 auto-renew a Let's Encrypt certificate via cert-manager.
 
+The image is built for you: [`.github/workflows/build-image.yml`](.github/workflows/build-image.yml)
+pushes `ghcr.io/thebrokengasmask/gasmaskserver:latest` (and a `:sha-<commit>`
+tag) on every push to `tbgm`, so there is no local `docker build` step. Both
+`linux/amd64` and `linux/arm64` are published under the one tag, each built on
+a native runner, so ARM hosts (Raspberry Pi, Ampere, Graviton) are supported
+without any change to the install command.
+
 ```bash
-docker build -t wynn-tracker-server:latest .
 helm install wynn-tracker deploy/helm/wynn-tracker-server \
   --namespace wynntracker --create-namespace --values my-values.yaml
+```
+
+To deploy a commit after its build goes green:
+
+```bash
+kubectl -n wynntracker rollout restart deploy/wynn-tracker-wynn-tracker-server
 ```
 
 See the [chart README](deploy/helm/wynn-tracker-server/README.md) for
